@@ -15,6 +15,7 @@ const translations = {
     nav_records: "Records",
     nav_analytics: "Analytics",
     nav_settings: "Settings",
+    nav_accounts: "Accounts",
 
     dashboard_title: "Dashboard",
     dashboard_subtitle: "Predicted accident risk by road corridor — Quezon City, next period forecast",
@@ -30,6 +31,8 @@ const translations = {
     analytics_subtitle: "Model performance comparison — Random Forest, SVM, Naive Bayes",
     settings_title: "Settings",
     settings_subtitle: "System information and account preferences",
+    accounts_title: "Manage Accounts",
+    accounts_subtitle: "Create staff accounts, reset passwords, and disable access",
 
     login_welcome: "Welcome back",
     login_subtitle: "Sign in to your account to continue",
@@ -56,6 +59,7 @@ const translations = {
     nav_records: "Mga Talaan",
     nav_analytics: "Analytics",
     nav_settings: "Mga Setting",
+    nav_accounts: "Mga Account",
 
     dashboard_title: "Dashboard",
     dashboard_subtitle: "Hinulaang antas ng panganib ng aksidente kada kalsada — Quezon City, susunod na hula",
@@ -71,6 +75,8 @@ const translations = {
     analytics_subtitle: "Paghahambing ng performance ng modelo — Random Forest, SVM, Naive Bayes",
     settings_title: "Mga Setting",
     settings_subtitle: "Impormasyon ng sistema at mga kagustuhan ng account",
+    accounts_title: "Pamahalaan ang mga Account",
+    accounts_subtitle: "Gumawa ng account ng staff, mag-reset ng password, at i-disable ang access",
 
     login_welcome: "Maligayang pagbabalik",
     login_subtitle: "Mag-sign in sa iyong account para magpatuloy",

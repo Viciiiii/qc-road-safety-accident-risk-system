@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
 import ProtectedRoute from "./auth/ProtectedRoute";
+import AdminRoute from "./auth/AdminRoute";
 import { ThemeProvider } from "./theme/ThemeContext";
 import { LanguageProvider } from "./i18n/LanguageContext";
 import AppShell from "./components/layout/AppShell";
@@ -12,6 +13,7 @@ import ReportIncident from "./pages/ReportIncident";
 import Records from "./pages/Records";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
+import Accounts from "./pages/Accounts";
 
 export default function App() {
   return (
@@ -30,6 +32,9 @@ export default function App() {
                   <Route path="report-incident" element={<ReportIncident />} />
                   <Route path="records" element={<Records />} />
                   <Route path="analytics" element={<Analytics />} />
+                  <Route element={<AdminRoute />}>
+                    <Route path="accounts" element={<Accounts />} />
+                  </Route>
                   <Route path="settings" element={<Settings />} />
                 </Route>
               </Route>

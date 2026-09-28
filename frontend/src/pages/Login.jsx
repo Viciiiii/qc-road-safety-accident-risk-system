@@ -53,7 +53,7 @@ export default function Login() {
             <ShieldIcon className="w-5 h-5 stroke-white" />
           </div>
           <h1 className="text-[26px] font-semibold tracking-tight leading-tight">
-            QC Road Safety
+            Quezon City Road Safety
             <br />
             Accident Risk System
           </h1>
@@ -84,7 +84,7 @@ export default function Login() {
             <div className="w-[34px] h-[34px] rounded-[10px] bg-accent flex items-center justify-center">
               <ShieldIcon className="w-[18px] h-[18px] stroke-white" />
             </div>
-            <span className="text-[15px] font-semibold">QC Road Safety</span>
+            <span className="text-[15px] font-semibold">QC Rass</span>
           </div>
 
           <h2 className="text-[22px] font-semibold tracking-tight">{t("login_welcome")}</h2>
@@ -123,6 +123,8 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@qc.gov.ph"
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
                 className="w-full text-sm px-3.5 py-2.5 border border-border rounded-lg focus:outline-none focus:border-accent"
               />
             </div>
@@ -137,6 +139,7 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   autoComplete="current-password"
+                  autoCapitalize="none"
                   className="w-full text-sm px-3.5 py-2.5 border border-border rounded-lg focus:outline-none focus:border-accent"
                 />
                 <button
@@ -171,7 +174,7 @@ export default function Login() {
           </div>
 
           <div className="text-[11.5px] text-muted bg-surface rounded-lg px-3 py-2.5 mt-4 leading-relaxed">
-            <b className="text-ink">Demo credentials</b> — Admin: admin@qc.gov.ph / Admin@123 · Staff:
+            <b className="text-ink">Demo credentials</b> (case-sensitive) — Admin: admin@qc.gov.ph / Admin@123 · Staff:
             staff@qc.gov.ph / Staff@123
           </div>
         </div>

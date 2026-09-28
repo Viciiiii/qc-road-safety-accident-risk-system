@@ -1,8 +1,10 @@
 import { NavLink } from "react-router-dom";
 import { useLanguage } from "../../i18n/LanguageContext";
+import { useAuth } from "../../auth/AuthContext";
 
 export default function Sidebar({ open, onNavigate }) {
   const { t } = useLanguage();
+  const { session } = useAuth();
 
   const navItems = [
     { to: "/", label: t("nav_dashboard"), end: true },
@@ -11,6 +13,7 @@ export default function Sidebar({ open, onNavigate }) {
     { to: "/report-incident", label: t("nav_reportIncident") },
     { to: "/records", label: t("nav_records") },
     { to: "/analytics", label: t("nav_analytics") },
+    ...(session?.role === "admin" ? [{ to: "/accounts", label: t("nav_accounts") }] : []),
     { to: "/settings", label: t("nav_settings") },
   ];
 
@@ -22,7 +25,7 @@ export default function Sidebar({ open, onNavigate }) {
         lg:translate-x-0 lg:sticky lg:h-screen`}
     >
       <div className="px-2">
-        <div className="text-[17px] font-semibold">QC Road Safety</div>
+        <div className="text-[17px] font-semibold">QC Rass</div>
         <div className="text-xs text-muted mt-0.5">Accident Risk System</div>
       </div>
 
