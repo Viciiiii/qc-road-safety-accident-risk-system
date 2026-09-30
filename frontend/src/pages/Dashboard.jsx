@@ -15,16 +15,10 @@ export default function Dashboard() {
           <h1 className="text-[26px] font-semibold tracking-tight">{t("dashboard_title")}</h1>
           <p className="text-sm text-muted mt-1">{t("dashboard_subtitle")}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <select className="text-sm bg-elevated border border-border rounded-lg px-3 py-2">
-            <option>Next month</option>
-            <option>Next quarter</option>
-            <option>Next year</option>
-          </select>
-          <select className="text-sm bg-elevated border border-border rounded-lg px-3 py-2">
-            <option>All corridors</option>
-            <option>Top 10 by volume</option>
-          </select>
+        <div className="text-xs text-muted bg-surface rounded-lg px-3 py-2 text-right">
+          Based on data through Sep 2026
+          <br />
+          <Link to="/settings" className="text-accent">Model status →</Link>
         </div>
       </div>
 

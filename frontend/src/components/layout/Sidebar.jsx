@@ -25,7 +25,7 @@ export default function Sidebar({ open, onNavigate }) {
         lg:translate-x-0 lg:sticky lg:h-screen`}
     >
       <div className="px-2">
-        <div className="text-[17px] font-semibold">QC Rass</div>
+        <div className="text-[17px] font-semibold">QC Road Safety</div>
         <div className="text-xs text-muted mt-0.5">Accident Risk System</div>
       </div>
 

@@ -2,6 +2,8 @@ import { useState } from "react";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
 import { useLanguage } from "../i18n/LanguageContext";
+import { useAuth } from "../auth/AuthContext";
+import { useIncidents } from "../incidents/IncidentsContext";
 import {
   corridorOptions,
   collisionTypeOptions,
@@ -15,6 +17,8 @@ const emptyVehicleCounts = Object.fromEntries(vehicleFields.map((f) => [f, 0]));
 
 export default function ReportIncident() {
   const { t } = useLanguage();
+  const { session } = useAuth();
+  const { addIncident } = useIncidents();
   const [corridor, setCorridor] = useState(corridorOptions[0]);
   const [datetime, setDatetime] = useState("");
   const [weather, setWeather] = useState(weatherOptions[0]);
@@ -31,12 +35,25 @@ export default function ReportIncident() {
 
   function handleSubmit(e) {
     e.preventDefault();
-    // Illustrative only - a real submit would POST all these fields (plus the
-    // hardcoded District="Central (Quezon)") to FastAPI's /api/predict-incident,
-    // which would run RF/SVM/NB and return real predictions + confidences.
+    // The "estimated" risk below is illustrative - a historical lookup, not a live
+    // model call (see the note under the result panel). It still becomes the
+    // incident's initial `priority` value in Records, same as a real triage model's
+    // prediction would, until an admin confirms the actual outcome.
     const risk = estimateFromHistoricalRisk(corridor);
+    addIncident({
+      corridor,
+      datetime,
+      weather,
+      collisionType,
+      accidentFactor,
+      vehicles: { ...vehicleCounts },
+      priority: risk,
+      loggedBy: session?.name || "Staff",
+    });
     setResult({ risk });
     setSubmitted(true);
+    setDatetime("");
+    setVehicleCounts(emptyVehicleCounts);
   }
 
   return (
@@ -175,9 +192,10 @@ export default function ReportIncident() {
                 </span>
               </div>
               <div className="text-[11.5px] text-muted bg-surface rounded-lg px-2.5 py-2 mt-3 leading-relaxed">
-                Illustrative only — based on {corridor}'s historical risk tier, not a live model
-                call. Real predictions require the FastAPI backend. Logged incidents are stored
-                and included the next time the risk model is retrained, once confirmed.
+                This incident has been saved to <b className="text-ink">Records</b>. The priority shown
+                above is a historical-risk estimate, not a live model call — real predictions require the
+                FastAPI backend. An admin still needs to confirm the actual outcome before this incident
+                counts toward retraining.
               </div>
             </>
           )}

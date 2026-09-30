@@ -4,6 +4,7 @@ import ProtectedRoute from "./auth/ProtectedRoute";
 import AdminRoute from "./auth/AdminRoute";
 import { ThemeProvider } from "./theme/ThemeContext";
 import { LanguageProvider } from "./i18n/LanguageContext";
+import { IncidentsProvider } from "./incidents/IncidentsContext";
 import AppShell from "./components/layout/AppShell";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -20,6 +21,7 @@ export default function App() {
     <ThemeProvider>
       <LanguageProvider>
         <AuthProvider>
+          <IncidentsProvider>
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<Login />} />
@@ -40,6 +42,7 @@ export default function App() {
               </Route>
             </Routes>
           </BrowserRouter>
+          </IncidentsProvider>
         </AuthProvider>
       </LanguageProvider>
     </ThemeProvider>
