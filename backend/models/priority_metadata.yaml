@@ -1,0 +1,52 @@
+excluded_leakage_columns:
+- Drivers Killed
+- Drivers Injured
+- Pass. Killed
+- Pass Injured
+- Pedestrian Killed
+- Pedestrian Injured
+feature_columns:
+- District (City)
+- Hour
+- Minute
+- Day
+- Month
+- Weather
+- Collision Type
+- Accident Factor
+- Bike
+- E-Bike
+- E-Trike
+- E-Scooter
+- Motorcycle
+- Tricycle
+- Car
+- PUJ
+- Fx / Taxi
+- Bus
+- Van
+- Truck
+- Train
+models:
+  naive_bayes:
+    accuracy: 0.4703572678147961
+    file: priority_naive_bayes.pkl
+    high_precision: 0.006701289998324677
+    high_recall: 0.8695652173913043
+  random_forest:
+    accuracy: 0.8161956225945651
+    file: priority_random_forest.pkl
+    high_precision: 0.1284722222222222
+    high_recall: 0.40217391304347827
+  svm:
+    accuracy: 0.6986354624266221
+    file: priority_svm.pkl
+    high_precision: 0.02233406731676628
+    high_recall: 0.7717391304347826
+priority_labels:
+- High
+- Medium
+- Low
+priority_mapping_source: 'Derived from Classification: Fatal=High, Non Fatal Injury=Medium,
+  Damage to Property=Low'
+trained_on: QC road crash data 2022-2025, SMOTE-resampled training set

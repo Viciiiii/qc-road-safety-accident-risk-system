@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
-import { allRiskAreas } from "../data/mockData";
+import { useRiskAreas } from "../api/useRiskAreas";
 import { useLanguage } from "../i18n/LanguageContext";
 
 export default function RiskAreas() {
   const { t } = useLanguage();
+  const { data: allRiskAreas, loading, error } = useRiskAreas();
   const [riskFilter, setRiskFilter] = useState("All");
   const [sortBy, setSortBy] = useState("volume");
   const [search, setSearch] = useState("");
@@ -24,7 +25,7 @@ export default function RiskAreas() {
       sortBy === "volume" ? b.incidents - a.incidents : b.rateValue - a.rateValue
     );
     return data;
-  }, [riskFilter, sortBy, search]);
+  }, [allRiskAreas, riskFilter, sortBy, search]);
 
   return (
     <>
@@ -63,6 +64,16 @@ export default function RiskAreas() {
       </div>
 
       <Card>
+        {loading && <div className="text-sm text-muted text-center py-8">Loading risk areas…</div>}
+
+        {error && (
+          <div className="text-sm text-high bg-high-bg rounded-lg px-3 py-2.5">
+            Couldn't load data from the server ({error}). Is the backend running at localhost:8000?
+          </div>
+        )}
+
+        {!loading && !error && (
+        <>
         <div className="text-xs text-muted mb-3">
           Showing {rows.length} of {allRiskAreas.length} monitored corridors
         </div>
@@ -122,6 +133,8 @@ export default function RiskAreas() {
           Excludes 1 corridor recorded as "Unknown" location in the source data. Risk Level is a tertile
           ranking by historical High-priority rate, not a forecast.
         </div>
+        </>
+        )}
       </Card>
     </>
   );

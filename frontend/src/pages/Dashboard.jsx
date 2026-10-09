@@ -1,12 +1,32 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
-import { summary, topCorridorsByVolume, riskAreasPreview } from "../data/mockData";
+import { useRiskAreas } from "../api/useRiskAreas";
 import { useLanguage } from "../i18n/LanguageContext";
 
 export default function Dashboard() {
   const { t } = useLanguage();
-  const maxVolume = Math.max(...topCorridorsByVolume.map((c) => c.incidents));
+  const { data, loading, error } = useRiskAreas();
+
+  const summary = useMemo(() => ({
+    corridorsMonitored: data.length,
+    high: data.filter((r) => r.risk === "High").length,
+    medium: data.filter((r) => r.risk === "Medium").length,
+    low: data.filter((r) => r.risk === "Low").length,
+  }), [data]);
+
+  const topByVolume = useMemo(
+    () => [...data].sort((a, b) => b.incidents - a.incidents).slice(0, 5),
+    [data]
+  );
+  const riskAreasPreview = useMemo(
+    () => [...data].sort((a, b) => b.rateValue - a.rateValue).slice(0, 5),
+    [data]
+  );
+  const maxVolume = topByVolume.length ? Math.max(...topByVolume.map((c) => c.incidents)) : 1;
+
+  const pct = (n) => (summary.corridorsMonitored ? Math.round((n / summary.corridorsMonitored) * 100) : 0);
 
   return (
     <>
@@ -22,6 +42,16 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {loading && <div className="text-sm text-muted text-center py-8">Loading dashboard…</div>}
+
+      {error && (
+        <div className="text-sm text-high bg-high-bg rounded-lg px-3 py-2.5">
+          Couldn't load data from the server ({error}). Is the backend running at localhost:8000?
+        </div>
+      )}
+
+      {!loading && !error && (
+      <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
         <Card>
           <div className="text-sm text-muted">Corridors Monitored</div>
@@ -33,21 +63,21 @@ export default function Dashboard() {
             <span className="w-2 h-2 rounded-full bg-high" />High Risk
           </div>
           <div className="text-3xl font-semibold tracking-tight mt-1.5">{summary.high}</div>
-          <div className="text-xs text-muted mt-1">33% of monitored corridors</div>
+          <div className="text-xs text-muted mt-1">{pct(summary.high)}% of monitored corridors</div>
         </Card>
         <Card>
           <div className="text-sm text-muted flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-med" />Medium Risk
           </div>
           <div className="text-3xl font-semibold tracking-tight mt-1.5">{summary.medium}</div>
-          <div className="text-xs text-muted mt-1">33% of monitored corridors</div>
+          <div className="text-xs text-muted mt-1">{pct(summary.medium)}% of monitored corridors</div>
         </Card>
         <Card>
           <div className="text-sm text-muted flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-low" />Low Risk
           </div>
           <div className="text-3xl font-semibold tracking-tight mt-1.5">{summary.low}</div>
-          <div className="text-xs text-muted mt-1">33% of monitored corridors</div>
+          <div className="text-xs text-muted mt-1">{pct(summary.low)}% of monitored corridors</div>
         </Card>
       </div>
 
@@ -56,9 +86,9 @@ export default function Dashboard() {
           <div className="text-[15px] font-semibold">Historical incident volume by corridor</div>
           <div className="text-xs text-muted mb-4">Total recorded incidents, 2022–2025 (top 5 by volume)</div>
           <div className="flex items-end gap-2.5 h-36">
-            {topCorridorsByVolume.map((c) => (
+            {topByVolume.map((c) => (
               <div
-                key={c.name}
+                key={c.corridor}
                 className="flex-1 bg-accent-soft rounded-t relative"
                 style={{ height: `${(c.incidents / maxVolume) * 100}%` }}
               >
@@ -67,9 +97,9 @@ export default function Dashboard() {
             ))}
           </div>
           <div className="flex gap-2.5 mt-2">
-            {topCorridorsByVolume.map((c) => (
-              <span key={c.name} className="flex-1 text-center text-[10.5px] text-muted">
-                {c.name}
+            {topByVolume.map((c) => (
+              <span key={c.corridor} className="flex-1 text-center text-[10.5px] text-muted">
+                {c.corridor}
                 <br />
                 {c.incidents.toLocaleString()}
               </span>
@@ -79,7 +109,9 @@ export default function Dashboard() {
 
         <Card>
           <div className="text-[15px] font-semibold">Risk level distribution</div>
-          <div className="text-xs text-muted mb-4">30 corridors, ranked by historical High-priority rate</div>
+          <div className="text-xs text-muted mb-4">
+            {summary.corridorsMonitored} corridors, ranked by historical High-priority rate
+          </div>
           <div className="flex flex-col gap-3.5">
             {[
               { label: "High", count: summary.high, color: "bg-high" },
@@ -92,7 +124,7 @@ export default function Dashboard() {
                   <span>{row.count} corridors</span>
                 </div>
                 <div className="h-1.5 bg-surface rounded overflow-hidden">
-                  <div className={`h-full rounded ${row.color}`} style={{ width: "33.3%" }} />
+                  <div className={`h-full rounded ${row.color}`} style={{ width: `${pct(row.count)}%` }} />
                 </div>
               </div>
             ))}
@@ -157,8 +189,9 @@ export default function Dashboard() {
         </div>
 
         <div className="text-[11.5px] text-muted bg-surface rounded-lg px-2.5 py-2 mt-3.5 leading-relaxed">
-          Risk Level is a relative ranking (tertile) of historical High-priority rate across the 30 monitored
-          corridors — it describes 2022–2025 data, not a forecast for a future period.
+          Risk Level is a relative ranking (tertile) of historical High-priority rate across the{" "}
+          {summary.corridorsMonitored} monitored corridors — it describes 2022–2025 data, not a forecast
+          for a future period.
         </div>
       </Card>
 
@@ -171,6 +204,8 @@ export default function Dashboard() {
           <Link to="/report-incident" className="text-xs text-accent font-medium">Open form →</Link>
         </div>
       </Card>
+      </>
+      )}
     </>
   );
 }

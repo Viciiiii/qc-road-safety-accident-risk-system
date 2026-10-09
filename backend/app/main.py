@@ -1,13 +1,30 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import risk_areas
+from .ml.predictor import get_predictor
+from .routers import predict, risk_areas
 
-app = FastAPI(title="QC Road Safety API")
+logger = logging.getLogger("uvicorn.error")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load the models at startup so a missing/incompatible file shows up immediately,
+    # instead of on the first prediction request. The rest of the API still starts.
+    try:
+        get_predictor()
+        logger.info("Prediction models loaded.")
+    except Exception as exc:
+        logger.error("Could not load prediction models: %s", exc)
+    yield
+
+
+app = FastAPI(title="QC Road Safety API", lifespan=lifespan)
 
 # Allows the Vite dev server (localhost:5173) to call this API from the browser.
-# Browsers block cross-origin requests by default unless the server explicitly
-# allows them - without this, every fetch() from React would fail silently.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -17,6 +34,7 @@ app.add_middleware(
 )
 
 app.include_router(risk_areas.router)
+app.include_router(predict.router)
 
 
 @app.get("/")

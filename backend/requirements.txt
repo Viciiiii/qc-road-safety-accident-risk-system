@@ -3,3 +3,9 @@ uvicorn[standard]
 sqlalchemy
 psycopg2-binary
 python-dotenv
+# The models in models/ were pickled with scikit-learn 1.6.1. Pickles are only
+# guaranteed to load on the same version, so this is pinned on purpose.
+scikit-learn==1.6.1
+joblib
+pandas
+numpy

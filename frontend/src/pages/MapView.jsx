@@ -1,13 +1,16 @@
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import { allRiskAreas, corridorCoordinates } from "../data/mockData";
+import { useRiskAreas } from "../api/useRiskAreas";
 import { useLanguage } from "../i18n/LanguageContext";
 
 const riskColor = { High: "#c0392b", Medium: "#b8790a", Low: "#2f8f5b" };
 
 export default function MapView() {
   const { t } = useLanguage();
-  const points = allRiskAreas.filter((r) => corridorCoordinates[r.corridor]);
+  const { data, loading, error } = useRiskAreas();
+  // Coordinates now come straight from the backend (seeded into risk_areas),
+  // not a separate frontend lookup table - filter out any corridor missing them.
+  const points = data.filter((r) => r.latitude != null && r.longitude != null);
 
   return (
     <>
@@ -16,6 +19,16 @@ export default function MapView() {
         <p className="text-sm text-muted mt-1">{t("map_subtitle")}</p>
       </div>
 
+      {loading && <div className="text-sm text-muted text-center py-8">Loading map…</div>}
+
+      {error && (
+        <div className="text-sm text-high bg-high-bg rounded-lg px-3 py-2.5">
+          Couldn't load data from the server ({error}). Is the backend running at localhost:8000?
+        </div>
+      )}
+
+      {!loading && !error && (
+      <>
       <div className="bg-elevated border border-border rounded-xl overflow-hidden relative" style={{ height: 560 }}>
         <MapContainer
           center={[14.676, 121.0437]}
@@ -30,7 +43,7 @@ export default function MapView() {
           {points.map((r) => (
             <CircleMarker
               key={r.corridor}
-              center={corridorCoordinates[r.corridor]}
+              center={[r.latitude, r.longitude]}
               radius={9}
               pathOptions={{
                 color: riskColor[r.risk],
@@ -71,9 +84,11 @@ export default function MapView() {
 
       <div className="text-[11.5px] text-muted bg-surface rounded-lg px-2.5 py-2 mt-3.5 leading-relaxed">
         Corridor locations are approximate (manually estimated general positions along each road), not
-        precisely geocoded. Showing {points.length} of {allRiskAreas.length} monitored corridors. Click a
+        precisely geocoded. Showing {points.length} of {data.length} monitored corridors. Click a
         marker for details.
       </div>
+      </>
+      )}
     </>
   );
 }

@@ -1,0 +1,120 @@
+{
+  "weather": [
+    "Fair (Day)",
+    "Fair (Night)"
+  ],
+  "collision_types": [
+    {
+      "value": "Side Swipe",
+      "label": "Side Swipe",
+      "count": 43299
+    },
+    {
+      "value": "Rear End",
+      "label": "Rear End",
+      "count": 38193
+    },
+    {
+      "value": "Angle Impact",
+      "label": "Angle Impact",
+      "count": 16748
+    },
+    {
+      "value": "Multiple Collision",
+      "label": "Multiple Collision",
+      "count": 4892
+    },
+    {
+      "value": "Self Accident",
+      "label": "Self Accident",
+      "count": 4387
+    },
+    {
+      "value": "Hit and Run",
+      "label": "Hit and Run",
+      "count": 4326
+    },
+    {
+      "value": "Hit Object",
+      "label": "Hit Object",
+      "count": 4031
+    },
+    {
+      "value": "Hit Pedestrian",
+      "label": "Hit Pedestrian",
+      "count": 3765
+    },
+    {
+      "value": "No Collision Stated (Based on the Police Blotter Book)",
+      "label": "No Collision Stated (Based on the Police Blotter Book)",
+      "count": 2368
+    },
+    {
+      "value": "Hit Parked Vehicle",
+      "label": "Hit Parked Vehicle",
+      "count": 2276
+    },
+    {
+      "value": "Head On",
+      "label": "Head On",
+      "count": 1508
+    },
+    {
+      "value": "Hit and Run / Side Swipe",
+      "label": "Hit and Run / Side Swipe",
+      "count": 1427
+    },
+    {
+      "value": "Hit and Run / Rear End",
+      "label": "Hit and Run / Rear End",
+      "count": 894
+    },
+    {
+      "value": "Hit and Run / Angle Impact",
+      "label": "Hit and Run / Angle Impact",
+      "count": 384
+    },
+    {
+      "value": "Hit and Run / Hit Pedestrian",
+      "label": "Hit and Run / Hit Pedestrian",
+      "count": 118
+    },
+    {
+      "value": "Hit and Run / Hit Parked Vehicle",
+      "label": "Hit and Run / Hit Parked Vehicle",
+      "count": 113
+    }
+  ],
+  "accident_factors": [
+    {
+      "value": "No Accident Factor (Based on the Police Blotter Book)",
+      "label": "No Accident Factor (Based on the Police Blotter Book)",
+      "count": 104047
+    },
+    {
+      "value": "Human Error",
+      "label": "Human Error",
+      "count": 24639
+    },
+    {
+      "value": "Road Condition",
+      "label": "Road Condition",
+      "count": 62
+    },
+    {
+      "value": "Vehicle Defect ",
+      "label": "Vehicle Defect",
+      "count": 50
+    },
+    {
+      "value": "Act of Nature",
+      "label": "Act of Nature",
+      "count": 15
+    },
+    {
+      "value": "Under the Influence of Liquor",
+      "label": "Under the Influence of Liquor",
+      "count": 11
+    }
+  ]
+}
