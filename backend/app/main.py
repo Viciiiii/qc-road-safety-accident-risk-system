@@ -1,13 +1,24 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .ml.predictor import get_predictor
 from .routers import predict, risk_areas
 
+load_dotenv()  # so CORS_ORIGINS in .env is visible below, whatever the import order
 logger = logging.getLogger("uvicorn.error")
+
+DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+
+
+def allowed_origins():
+    """Browser origins allowed to call this API, from CORS_ORIGINS (comma-separated)."""
+    raw = os.getenv("CORS_ORIGINS") or DEFAULT_ORIGINS  # blank counts as unset
+    return [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
 
 
 @asynccontextmanager
@@ -24,10 +35,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="QC Road Safety API", lifespan=lifespan)
 
-# Allows the Vite dev server (localhost:5173) to call this API from the browser.
+# Lets the frontend (by default the Vite dev server) call this API from the browser.
+# To serve the frontend from somewhere else, add its address to CORS_ORIGINS in .env.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

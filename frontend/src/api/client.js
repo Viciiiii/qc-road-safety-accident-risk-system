@@ -1,7 +1,6 @@
-// Base URL for the FastAPI backend. Hardcoded for local dev - once this gets
-// deployed, this should come from an env variable instead (Vite exposes those
-// via import.meta.env.VITE_API_URL).
-const API_BASE = "http://localhost:8000";
+// Where the FastAPI backend lives. Set VITE_API_URL to point somewhere else
+// (see frontend/.env.example); otherwise the local dev server is used.
+export const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 
 // FastAPI reports errors two ways: a plain string (our own checks) or a list of
 // {msg, loc} objects (automatic validation). Turn either into one readable message.

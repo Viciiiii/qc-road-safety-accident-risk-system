@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
 import { useRiskAreas } from "../api/useRiskAreas";
+import { API_BASE } from "../api/client";
 import { useLanguage } from "../i18n/LanguageContext";
 
 export default function Dashboard() {
@@ -46,7 +47,7 @@ export default function Dashboard() {
 
       {error && (
         <div className="text-sm text-high bg-high-bg rounded-lg px-3 py-2.5">
-          Couldn't load data from the server ({error}). Is the backend running at localhost:8000?
+          Couldn't load data from the server ({error}). Is the backend running at {API_BASE}?
         </div>
       )}
 

@@ -1,6 +1,7 @@
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { useRiskAreas } from "../api/useRiskAreas";
+import { API_BASE } from "../api/client";
 import { useLanguage } from "../i18n/LanguageContext";
 
 const riskColor = { High: "#c0392b", Medium: "#b8790a", Low: "#2f8f5b" };
@@ -23,7 +24,7 @@ export default function MapView() {
 
       {error && (
         <div className="text-sm text-high bg-high-bg rounded-lg px-3 py-2.5">
-          Couldn't load data from the server ({error}). Is the backend running at localhost:8000?
+          Couldn't load data from the server ({error}). Is the backend running at {API_BASE}?
         </div>
       )}
 

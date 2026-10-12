@@ -6,7 +6,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useIncidents } from "../incidents/IncidentsContext";
 import { useRiskAreas } from "../api/useRiskAreas";
 import { useFormOptions } from "../api/useFormOptions";
-import { apiPost } from "../api/client";
+import { apiPost, API_BASE } from "../api/client";
 import { modelMetrics } from "../data/mockData";
 
 // Held-out precision on High priority, from the training notebook. Shown as a
@@ -152,7 +152,7 @@ export default function ReportIncident() {
 
       {loadError && (
         <div className="text-sm text-high bg-high-bg rounded-lg px-3 py-2.5">
-          Couldn't load the form from the server ({loadError}). Is the backend running at localhost:8000?
+          Couldn't load the form from the server ({loadError}). Is the backend running at {API_BASE}?
         </div>
       )}
 
