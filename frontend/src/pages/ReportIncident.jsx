@@ -6,7 +6,7 @@ import { useIncidents } from "../incidents/IncidentsContext";
 import { useRiskAreas } from "../api/useRiskAreas";
 import { useFormOptions } from "../api/useFormOptions";
 import { apiPost, API_BASE } from "../api/client";
-import { modelMetrics } from "../data/mockData";
+import { modelMetrics } from "../data/modelResults";
 
 // Held-out precision on High priority (backend/models/priority_metadata.yaml). Shown as a
 // caution whenever a model flags High, so the number isn't taken at face value.

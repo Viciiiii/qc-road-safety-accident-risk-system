@@ -1,4 +1,4 @@
-import { vehicleFields } from "../data/mockData";
+import { vehicleFields } from "../data/modelResults";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",

@@ -18,4 +18,9 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+  {
+    // Tests run in Node (vitest / Playwright), so Node globals like process are allowed there.
+    files: ['tests/**/*.{js,jsx,mjs}'],
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
+  },
 ])

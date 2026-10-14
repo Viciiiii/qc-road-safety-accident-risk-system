@@ -114,8 +114,9 @@ backend/
     ml/predictor.py      Loads the models and cutoffs, runs predictions
   models/                Trained models, cutoffs (priority_model_config.json), encoders, form options
   db/                    SQL scripts: create tables, seed corridors, monthly crash counts, model estimates
-  scripts/               train_models.py, build_form_options.py, build_corridor_monthly.py
-  requirements.txt       (requirements-train.txt adds what retraining needs)
+  scripts/               train_models.py, create_admin.py, build_form_options.py, build_corridor_monthly.py
+  tests/                 Backend tests (pytest)
+  requirements.txt       (requirements-train.txt adds retraining, requirements-dev.txt adds testing)
   .env.example
 frontend/
   src/
@@ -124,7 +125,8 @@ frontend/
     components/          layout (sidebar, shell) and ui (card, badge, ranking note)
     api/                 API client and data hooks
     auth/ incidents/ theme/ i18n/    App-wide state
-    data/mockData.js     Fixed model test results shown on Analytics
+    data/modelResults.js The models' real test-set results shown on Analytics and Report Incident
+  tests/                 End-to-end (vitest) and browser (Playwright) tests
   .env.example
 ```
 
@@ -219,7 +221,7 @@ To open the app from another device on your network, use the computer's IP addre
 1. Staff log a crash on **Report Incident**. It appears in **Records** as *Pending review*, with the models' estimate. It doesn't affect anything else yet.
 2. When the real outcome is known, an admin picks Fatal / Non Fatal Injury / Damage to Property in **Records** and confirms it (*Confirmed*). From then on it counts toward its corridor's severity score right away (unless it's dated before the ranking's 12-month window).
 3. The admin clicks **Export for retraining**. The CSV uses the same column names as the MMDA data, and the rows become *Included in training*.
-4. Append those rows to the historical dataset and run `python scripts/train_models.py <folder with the raw Excel files>` (see *Improving precision*). It writes the models, cutoffs and metadata into `backend/models/`. Then run `python scripts/build_form_options.py <same folder>`, update the numbers in `frontend/src/data/mockData.js` from `priority_metadata.yaml`, and restart the API. Keep scikit-learn at the version you trained with and update `requirements.txt` to match.
+4. Append those rows to the historical dataset and run `python scripts/train_models.py <folder with the raw Excel files>` (see *Improving precision*). It writes the models, cutoffs and metadata into `backend/models/`. Then run `python scripts/build_form_options.py <same folder>`, update the numbers in `frontend/src/data/modelResults.js` from `priority_metadata.yaml`, and restart the API. Keep scikit-learn at the version you trained with and update `requirements.txt` to match.
 
 The models' own estimate is never used as a training label; only confirmed outcomes are, so the models don't learn from their own guesses.
 
@@ -232,6 +234,16 @@ python scripts/build_corridor_monthly.py "C:\path\to\folder\with\the\xlsx\files"
 ```
 
 Then run the regenerated `db/03_corridor_monthly.sql` in pgAdmin. New months are added, and the ranking moves forward automatically. Confirmed incidents keep counting as long as they fall inside the new 12-month window.
+
+## Tests
+
+The tests run against a **separate test database**, so your real data is never touched. Setup and commands are in [`backend/tests/README.md`](backend/tests/README.md) and [`frontend/tests/README.md`](frontend/tests/README.md).
+
+| Suite | Command | Covers |
+|---|---|---|
+| Backend | `pytest -s` (in `backend`) | Ranking recounted with SQL, the incident flow, sign-in and permissions, predictions and cutoffs; optionally that the models reproduce the reported test-set results exactly and that the API matches the training pipeline |
+| Frontend | `npm run test:e2e` (in `frontend`) | The real pages against the real API, end to end |
+| Browser | `npm run test:browser` (in `frontend`) | Sign-in and account management clicked through in Chromium |
 
 ## Limitations
 

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import Card from "../components/ui/Card";
-import { modelMetrics, previousMetrics, featureImportance, TEST_FATAL, FATAL_BASE_RATE } from "../data/mockData";
+import { modelMetrics, previousMetrics, featureImportance, TEST_FATAL, FATAL_BASE_RATE } from "../data/modelResults";
 import { useLanguage } from "../i18n/LanguageContext";
 import { useIncidents } from "../incidents/IncidentsContext";
 import { MODELS as LIVE_MODELS, SMALL_SAMPLE, tally } from "../incidents/estimateCheck";

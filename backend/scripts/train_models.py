@@ -45,7 +45,7 @@ from app.ml.features import (  # noqa: E402
 )
 
 MODELS_DIR = os.path.join(HERE, "..", "models")
-RAW_DIR = sys.argv[1] if len(sys.argv) > 1 else "."
+RAW_DIR = sys.argv[1] if __name__ == "__main__" and len(sys.argv) > 1 else "."
 YEARS = (2022, 2023, 2024, 2025)
 CLASSES = ["High", "Medium", "Low"]
 
@@ -84,12 +84,13 @@ MODELS = {
 }
 
 
-def read_raw():
+def read_raw(raw_dir=None):
+    raw_dir = raw_dir or RAW_DIR
     frames = []
     wanted = ["Hour", "Minute", "Day", "Month", "Weather", "Collision Type", "Accident Factor",
               "District (City)", "Street", "Classification"] + VEHICLE_FIELDS
     for year in YEARS:
-        path = os.path.join(RAW_DIR, f"RAW_Data_QC_{year}.xlsx")
+        path = os.path.join(raw_dir, f"RAW_Data_QC_{year}.xlsx")
         ws = openpyxl.load_workbook(path, read_only=True, data_only=True)["QC road crash data"]
         rows = ws.iter_rows(max_col=60, values_only=True)   # sheets declare ~16k empty columns
         header = [h if h is not None else f"_c{i}" for i, h in enumerate(next(rows))]

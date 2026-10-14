@@ -1,0 +1,5 @@
+# Extra packages for running the backend tests (backend/tests). Not needed to run the app.
+#   pip install -r requirements.txt -r requirements-dev.txt
+# Add -r requirements-train.txt too if you run test_model_parity.py (it reads the raw Excel files).
+pytest
+httpx
