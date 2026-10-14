@@ -42,7 +42,13 @@ export function useRiskAreas() {
           weights: res.weights,
           highSlots: res.high_slots,
           mediumSlots: res.medium_slots,
-          confirmedAfterWindow: res.confirmed_after_window,
+          confirmedSinceData: res.confirmed_since_data,
+          // e.g. "Jan 2025 – Dec 2025 + 2 confirmed reports since" when newer confirmed incidents count too
+          scopeLabel:
+            `${monthLabel(res.window_start)} – ${monthLabel(res.data_through)}` +
+            (res.confirmed_since_data > 0
+              ? ` + ${res.confirmed_since_data} confirmed report${res.confirmed_since_data === 1 ? "" : "s"} since`
+              : ""),
           confirmedInWindow: res.corridors.reduce((n, c) => n + c.confirmed_incidents, 0),
         });
       })

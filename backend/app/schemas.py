@@ -32,7 +32,7 @@ class RankingOut(BaseModel):
     weights: Dict[str, int]
     high_slots: int
     medium_slots: int
-    confirmed_after_window: int  # confirmed incidents dated after data_through - not counted yet
+    confirmed_since_data: int  # counted confirmed incidents dated after data_through (newer than the MMDA data)
     corridors: List[CorridorRankOut]
 
 

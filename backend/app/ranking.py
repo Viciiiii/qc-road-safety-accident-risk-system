@@ -1,11 +1,13 @@
 """
 Corridor priority ranking for LGU resource allocation.
 
-Each corridor gets a severity score for the 12 most recent months of data:
+Each corridor gets a severity score:
     score = 1 x damage-only crashes + 3 x injury crashes + 10 x fatal crashes
-Crashes come from the MMDA monthly data (corridor_monthly) plus incidents that staff
-logged and an admin confirmed (their real outcome is known, so they count like any
-other crash). Unconfirmed incidents never count - they only have a model's estimate.
+counting the 12 most recent months of MMDA data (corridor_monthly), plus every incident
+that staff logged and an admin confirmed from the start of that window up to today -
+including ones newer than the MMDA data, which are the most recent information there is.
+Confirmed incidents have a known real outcome, so they count like any other crash.
+Unconfirmed incidents never count - they only have a model's estimate.
 
 Corridors are ranked by score: the top 10 are High priority, the next 10 Medium,
 the rest Low. In a backtest (train 2022-2024, test every month of 2025), this ranking
@@ -48,7 +50,7 @@ def compute_ranking(db: Session) -> dict:
     if data_through is None:
         raise NoMonthlyData("No monthly corridor data. Run backend/db/03_corridor_monthly.sql (see README).")
     window_start = add_months(data_through, -(WINDOW_MONTHS - 1))
-    window_end = add_months(data_through, 1)  # exclusive
+    data_end = add_months(data_through, 1)  # first day after the MMDA data
 
     areas = db.query(models.RiskArea).all()
     totals = {a.corridor: {"damage": 0, "injury": 0, "fatal": 0, "confirmed_incidents": 0} for a in areas}
@@ -65,17 +67,17 @@ def compute_ranking(db: Session) -> dict:
                  .filter(models.Incident.status.in_(COUNTED_STATUSES),
                          models.Incident.confirmed_outcome.isnot(None))
                  .all())
-    start_dt, end_dt = datetime.combine(window_start, datetime.min.time()), datetime.combine(window_end, datetime.min.time())
-    after_window = 0
+    start_dt = datetime.combine(window_start, datetime.min.time())
+    data_end_dt = datetime.combine(data_end, datetime.min.time())
+    since_data = 0
     for inc in confirmed:
         key = OUTCOME_KEY.get(inc.confirmed_outcome)
-        if key is None or inc.corridor not in totals:
-            continue
-        if start_dt <= inc.incident_datetime < end_dt:
-            totals[inc.corridor][key] += 1
-            totals[inc.corridor]["confirmed_incidents"] += 1
-        elif inc.incident_datetime >= end_dt:
-            after_window += 1
+        if key is None or inc.corridor not in totals or inc.incident_datetime < start_dt:
+            continue  # older than the window
+        totals[inc.corridor][key] += 1
+        totals[inc.corridor]["confirmed_incidents"] += 1
+        if inc.incident_datetime >= data_end_dt:
+            since_data += 1  # newer than the MMDA data
 
     corridors = []
     for a in areas:
@@ -102,6 +104,6 @@ def compute_ranking(db: Session) -> dict:
         "weights": WEIGHTS,
         "high_slots": HIGH_SLOTS,
         "medium_slots": MEDIUM_SLOTS,
-        "confirmed_after_window": after_window,
+        "confirmed_since_data": since_data,
         "corridors": corridors,
     }

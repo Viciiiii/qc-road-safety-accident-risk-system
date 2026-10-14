@@ -6,18 +6,15 @@ export default function RankingNote({ meta, className = "" }) {
   return (
     <div className={`text-[11.5px] text-muted bg-surface rounded-lg px-2.5 py-2 leading-relaxed ${className}`}>
       <b className="text-ink">How corridors are ranked:</b> each corridor's crashes from{" "}
-      {meta.windowLabel} are scored by seriousness — {damage} point for damage only, {injury} for an injury,{" "}
+      {meta.windowLabel} (MMDA data), plus crashes staff logged and an admin confirmed since then, are scored by seriousness — {damage} point for damage only, {injury} for an injury,{" "}
       {fatal} for a death. The top {meta.highSlots} corridors are High priority, the next {meta.mediumSlots}{" "}
       Medium, and the rest Low. Tested on 2025 data, about 9 in 10 corridors ranked High were again among the
       10 worst the following month.
       {meta.confirmedInWindow > 0 && (
-        <> Includes {meta.confirmedInWindow} staff-logged incident{meta.confirmedInWindow === 1 ? "" : "s"} confirmed by an admin.</>
-      )}
-      {meta.confirmedAfterWindow > 0 && (
         <>
           {" "}
-          {meta.confirmedAfterWindow} confirmed incident{meta.confirmedAfterWindow === 1 ? " is" : "s are"} dated after{" "}
-          {meta.dataThroughLabel} and will count once newer MMDA data is loaded.
+          Includes {meta.confirmedInWindow} confirmed staff-logged incident{meta.confirmedInWindow === 1 ? "" : "s"}
+          {meta.confirmedSinceData > 0 && <>, {meta.confirmedSinceData} of them from after {meta.dataThroughLabel}</>}.
         </>
       )}
     </div>

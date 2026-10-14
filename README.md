@@ -14,10 +14,10 @@ A web app that shows Quezon City LGU staff which road corridors to prioritize ne
 | **Report Incident** | Staff log a crash; Random Forest, SVM and Naive Bayes each predict its priority level |
 | **Records** | Incidents staff have logged (stored in PostgreSQL). An admin records the real outcome, which then counts toward the corridor ranking, and exports confirmed incidents as CSV for retraining. Each confirmed incident shows whether the estimate was correct, underestimated or overestimated |
 | **Analytics** | Accuracy, precision, recall and feature importance of the three models on the test set, plus their live results on incidents logged in the app |
-| **Accounts** *(admin only)* | Create staff accounts, reset passwords, disable access |
-| **Settings** | Dark mode, English/Tagalog (navigation and headings only), model status |
+| **Accounts** *(admin only)* | Create staff accounts (with a one-time temporary password), reset passwords, disable access, see last sign-in |
+| **Settings** | Dark mode, English/Tagalog (navigation and headings only), model status, change your password |
 
-A corridor's **priority level** comes from its **severity score** over the 12 most recent months of data: each crash counts 1 point if it only damaged property, 3 if someone was injured, and 10 if someone died. The top 10 corridors are High priority, the next 10 Medium, and the remaining 9 Low. Crashes that staff log and an admin confirms are added to the score; unconfirmed ones are not. The logic is in `backend/app/ranking.py`.
+A corridor's **priority level** comes from its **severity score** over the 12 most recent months of MMDA data: each crash counts 1 point if it only damaged property, 3 if someone was injured, and 10 if someone died. The top 10 corridors are High priority, the next 10 Medium, and the remaining 9 Low. Crashes that staff log and an admin confirms are added to the score straight away, including ones dated after the MMDA data ends (they're the newest information available); unconfirmed ones are not. The logic is in `backend/app/ranking.py`.
 
 ## How "priority" is defined
 
@@ -93,17 +93,20 @@ Browser (React)  ──HTTP/JSON──▶  FastAPI  ──▶  PostgreSQL   (cor
 
 **Stack:** React 19, Vite, Tailwind CSS 4, React Router, Leaflet · FastAPI, SQLAlchemy, PostgreSQL · scikit-learn 1.6.1
 
-Logged incidents are stored in PostgreSQL, so every computer sees the same Records. Accounts, login, and theme/language preferences are still stored **in the browser** (`localStorage`). The `users` table already exists for the planned move.
+Logged incidents and accounts are stored in PostgreSQL, so every computer sees the same data. Only theme and language preferences are kept in the browser.
 
 ```
 backend/
   app/
-    main.py              FastAPI app, CORS, model loading at startup
+    main.py              FastAPI app, CORS, model loading at startup, sign-in required on all routes
+    auth.py              Password hashing, sessions, permission checks
     database.py          PostgreSQL connection
-    models.py            Table definitions (users, incidents, risk_areas, corridor_monthly)
+    models.py            Table definitions (users, user_sessions, incidents, risk_areas, corridor_monthly)
     schemas.py           API request/response shapes
     ranking.py           The 12-month severity ranking
     routers/
+      auth.py            POST /api/auth/login  /logout  /change-password   GET /api/auth/me
+      users.py           Admin only: GET/POST /api/users  POST /api/users/{id}/reset-password  PATCH /api/users/{id}
       risk_areas.py      GET  /api/risk-areas            (the corridor ranking)
       incidents.py       GET/POST /api/incidents   POST /api/incidents/{id}/confirm   POST /api/incidents/export
       predict.py         GET  /api/form-options    POST /api/predict-incident
@@ -141,11 +144,12 @@ psql -U postgres -d qc_road_safety -f backend/db/01_create_tables.sql
 psql -U postgres -d qc_road_safety -f backend/db/02_seed_risk_areas.sql
 psql -U postgres -d qc_road_safety -f backend/db/03_corridor_monthly.sql
 psql -U postgres -d qc_road_safety -f backend/db/04_model_estimates.sql
+psql -U postgres -d qc_road_safety -f backend/db/05_auth.sql
 ```
 
-In pgAdmin, run the first two statements separately (`CREATE DATABASE` can't share a batch with other statements), then run the other five **connected to `qc_road_safety`**. Both scripts are safe to run again.
+In pgAdmin, run the first two statements separately (`CREATE DATABASE` can't share a batch with other statements), then run the rest **connected to `qc_road_safety`**. The scripts are safe to run again.
 
-**Already set up an earlier version?** Run only the scripts you haven't run yet, in order: `03_corridor_monthly.sql` (monthly crash table) and `04_model_estimates.sql` (saves all three models' estimates). Both leave your existing data alone.
+**Already set up an earlier version?** Run only the scripts you haven't run yet, in order: `03_corridor_monthly.sql` (monthly crash table), `04_model_estimates.sql` (saves all three models' estimates), `05_auth.sql` (sign-in). They leave your existing data alone.
 
 ### 2. Backend
 
@@ -163,7 +167,15 @@ Open `.env` and replace `your-password-here` with your database password, then s
 uvicorn app.main:app --reload --port 8000
 ```
 
-Wait for **"Prediction models loaded."** in the log (it takes a few seconds). Try `http://localhost:8000/api/risk-areas`, or the interactive docs at `http://localhost:8000/docs`.
+Wait for **"Prediction models loaded."** in the log (it takes a few seconds). The interactive docs are at `http://localhost:8000/docs`. Every route except sign-in answers 401 until you're signed in.
+
+Create the first admin account (once). It asks for a name, email and password; the password is typed hidden:
+
+```powershell
+python scripts/create_admin.py
+```
+
+Run it again with the same email to reset a forgotten admin password.
 
 ### 3. Frontend
 
@@ -179,12 +191,15 @@ Open `http://localhost:5173`.
 
 ### 4. Sign in
 
-| Role | Email | Password |
-|---|---|---|
-| Admin | `admin@qc.gov.ph` | `Admin@123` |
-| Staff | `staff@qc.gov.ph` | `Staff@123` |
+Sign in with the admin account you just created, then add staff on **Accounts**.
 
-These are **demo credentials** for the prototype login, which is not secure (see [Limitations](#limitations)). Never reuse these passwords anywhere real. Email and password are case-sensitive.
+- **Emails** work in any letter case; **passwords** must match exactly.
+- **New staff:** the admin enters a name and email; the system generates a temporary password, shown once. The staff member signs in with it and sees a reminder on every page until they choose their own in **Settings**. A forgotten password works the same way: the admin clicks **Reset password**.
+- **Staying signed in:** 8 hours, or until the browser closes. Tick **Remember me** for 30 days. Signing out, a password change or reset, or disabling the account ends sessions straight away (a password change keeps only the current browser signed in).
+- **Wrong passwords:** after 5 wrong attempts, that email is locked for 15 minutes.
+- **What staff can't do:** open Accounts, confirm outcomes or export for retraining. The API enforces this, not just the menus.
+
+Passwords are stored as bcrypt hashes. The session is an httpOnly cookie that page scripts can't read, and the database keeps only a hash of it.
 
 ## Configuration
 
@@ -192,16 +207,17 @@ These are **demo credentials** for the prototype login, which is not secure (see
 |---|---|---|---|
 | `DATABASE_URL` | `backend/.env` | *(required)* | PostgreSQL connection. Keep the `postgresql+psycopg2://` prefix |
 | `CORS_ORIGINS` | `backend/.env` | `http://localhost:5173,http://127.0.0.1:5173` | Browser addresses allowed to call the API (comma-separated, no trailing slash) |
-| `VITE_API_URL` | `frontend/.env.local` | `http://localhost:8000` | Where the frontend finds the API |
+| `COOKIE_SECURE` | `backend/.env` | `false` | Set to `true` when the site is served over HTTPS |
+| `VITE_API_URL` | `frontend/.env.local` | port 8000 on the page's host name | Where the frontend finds the API |
 
-To open the app from another device or host it online: set `VITE_API_URL` to the backend's public address, add the frontend's address to `CORS_ORIGINS`, and restart both (for a production build, run `npm run build` again — Vite bakes `VITE_` values in at build time).
+To open the app from another device on your network, use the computer's IP address for both (for example `http://192.168.1.20:5173`), add that address to `CORS_ORIGINS`, and restart the backend. The sign-in cookie only works when the frontend and API share a host name, so `localhost:5173` pairs with `localhost:8000`. To host it online, serve both over HTTPS under one site, set `COOKIE_SECURE=true`, set `VITE_API_URL` and `CORS_ORIGINS`, and rebuild (`npm run build`; Vite bakes `VITE_` values in at build time).
 
 ## Updating the data and retraining
 
 ### Logged incidents
 
 1. Staff log a crash on **Report Incident**. It appears in **Records** as *Pending review*, with the models' estimate. It doesn't affect anything else yet.
-2. When the real outcome is known, an admin picks Fatal / Non Fatal Injury / Damage to Property in **Records** and confirms it (*Confirmed*). From then on it counts toward its corridor's severity score, if its date falls inside the ranking's 12-month window.
+2. When the real outcome is known, an admin picks Fatal / Non Fatal Injury / Damage to Property in **Records** and confirms it (*Confirmed*). From then on it counts toward its corridor's severity score right away (unless it's dated before the ranking's 12-month window).
 3. The admin clicks **Export for retraining**. The CSV uses the same column names as the MMDA data, and the rows become *Included in training*.
 4. Append those rows to the historical dataset and run `python scripts/train_models.py <folder with the raw Excel files>` (see *Improving precision*). It writes the models, cutoffs and metadata into `backend/models/`. Then run `python scripts/build_form_options.py <same folder>`, update the numbers in `frontend/src/data/mockData.js` from `priority_metadata.yaml`, and restart the API. Keep scikit-learn at the version you trained with and update `requirements.txt` to match.
 
@@ -215,13 +231,11 @@ The ranking always uses the 12 most recent months in `corridor_monthly`, which c
 python scripts/build_corridor_monthly.py "C:\path\to\folder\with\the\xlsx\files"
 ```
 
-Then run the regenerated `db/03_corridor_monthly.sql` in pgAdmin. New months are added, and the ranking moves forward automatically. Confirmed incidents dated after the newest month are stored and start counting once the window reaches them.
+Then run the regenerated `db/03_corridor_monthly.sql` in pgAdmin. New months are added, and the ranking moves forward automatically. Confirmed incidents keep counting as long as they fall inside the new 12-month window.
 
 ## Limitations
 
-- **The login is not secure.** Accounts, passwords and the admin check live in the browser, and the demo passwords are public in this repository. Anyone can fake a session from the browser's developer tools. The API has no authentication either.
-- **Accounts don't sync.** They are stored per browser. (Logged incidents do sync; they're in PostgreSQL.)
-- **The API has no login.** The admin-only buttons are hidden in the app, but anyone who can reach the API could create, confirm or export incidents.
+- **Sign-in is prototype-grade.** Passwords are hashed and sessions are server-side, but there is no email-based password reset (an admin resets it), no two-factor sign-in, and the wrong-password lockout is kept in memory, so it resets when the API restarts. Run it over HTTPS (`COOKIE_SECURE=true`) before putting it on the internet.
 - **The models ignore location.** Choosing a different street doesn't change a prediction; the street is only saved with the record.
 - **"High" is a weak alert.** Precision on High is low (table above), so most High flags are false alarms. The percentages shown are model scores, not real-world probabilities; that's why each model has its own High cutoff (Random Forest flags High from 18.4%).
 - **Old records keep old estimates.** Incidents logged before the model update show the estimate the first models gave at the time.
@@ -247,4 +261,7 @@ Then run the regenerated `db/03_corridor_monthly.sql` in pgAdmin. New months are
 | Warnings or errors loading the models | Install the pinned version: `pip install -r requirements.txt` (scikit-learn 1.6.1) |
 | `permission denied for schema public` | Run `GRANT ALL ON SCHEMA public TO csrp2_app;` while connected to `qc_road_safety` |
 | PowerShell says scripts are disabled | Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once |
+| Signed out right after signing in, or every page says "Please sign in" | Open the app and API on the same host name: `localhost:5173` with `localhost:8000`, not `127.0.0.1` with `localhost`. If you set `VITE_API_URL`, it must use the same host name too |
+| `relation "user_sessions" does not exist` or `column users.must_change_password does not exist` | Run `backend/db/05_auth.sql` in pgAdmin, connected to `qc_road_safety` |
+| Forgot the admin password | From `backend`, run `python scripts/create_admin.py` with the same email to set a new one |
 | `venv` or `.env` disappeared after unzipping files | Unzipping over a folder can replace it. Recreate the venv, `copy .env.example .env`, and re-enter your password |

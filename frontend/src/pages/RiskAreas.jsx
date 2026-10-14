@@ -71,7 +71,7 @@ export default function RiskAreas() {
         {!loading && !error && (
         <>
         <div className="text-xs text-muted mb-3">
-          Showing {rows.length} of {corridors.length} monitored corridors · crashes from {meta.windowLabel}
+          Showing {rows.length} of {corridors.length} monitored corridors · crashes from {meta.scopeLabel}
         </div>
 
         {/* Table: sm and up */}

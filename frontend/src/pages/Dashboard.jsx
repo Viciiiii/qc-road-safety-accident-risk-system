@@ -31,7 +31,7 @@ export default function Dashboard() {
         </div>
         {meta && (
           <div className="text-xs text-muted bg-surface rounded-lg px-3 py-2 text-right">
-            Priorities for next month · based on {meta.windowLabel}
+            Priorities for next month · based on {meta.scopeLabel}
             <br />
             <Link to="/settings" className="text-accent">Model status →</Link>
           </div>
