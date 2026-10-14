@@ -10,20 +10,8 @@ function readableError(detail, fallback) {
   return fallback;
 }
 
-export async function apiGet(path) {
-  const res = await fetch(`${API_BASE}${path}`);
-  if (!res.ok) {
-    throw new Error(`API error ${res.status}: ${path}`);
-  }
-  return res.json();
-}
-
-export async function apiPost(path, body) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+async function request(path, options) {
+  const res = await fetch(`${API_BASE}${path}`, options);
   if (!res.ok) {
     let detail;
     try {
@@ -34,4 +22,16 @@ export async function apiPost(path, body) {
     throw new Error(readableError(detail, `API error ${res.status}: ${path}`));
   }
   return res.json();
+}
+
+export function apiGet(path) {
+  return request(path);
+}
+
+export function apiPost(path, body) {
+  return request(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body ?? {}),
+  });
 }

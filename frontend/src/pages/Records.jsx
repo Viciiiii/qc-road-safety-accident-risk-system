@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
 import { useLanguage } from "../i18n/LanguageContext";
 import { useAuth } from "../auth/AuthContext";
 import { useIncidents } from "../incidents/IncidentsContext";
+import { API_BASE } from "../api/client";
 
 const statusChoices = ["All statuses", "Pending review", "Confirmed", "Included in training"];
 const OUTCOMES = ["Fatal", "Non Fatal Injury", "Damage to Property"];
@@ -26,7 +27,7 @@ function formatDateTime(iso) {
 
 // Admin-only control: confirm the real outcome for a Pending-review incident.
 // Once confirmed it becomes real, exportable training data (see exportConfirmed()).
-function ConfirmOutcome({ incident, onConfirm }) {
+function ConfirmOutcome({ incident, onConfirm, busy }) {
   const [outcome, setOutcome] = useState(OUTCOMES[0]);
   return (
     <div className="flex items-center gap-1.5">
@@ -39,7 +40,8 @@ function ConfirmOutcome({ incident, onConfirm }) {
       </select>
       <button
         onClick={() => onConfirm(incident.id, outcome)}
-        className="text-xs font-medium text-accent bg-surface px-2 py-1 rounded-lg"
+        disabled={busy}
+        className="text-xs font-medium text-accent bg-surface px-2 py-1 rounded-lg disabled:opacity-50"
       >
         Confirm
       </button>
@@ -47,9 +49,9 @@ function ConfirmOutcome({ incident, onConfirm }) {
   );
 }
 
-function StatusCell({ incident, isAdmin, onConfirm }) {
+function StatusCell({ incident, isAdmin, onConfirm, busy }) {
   if (incident.status === "Pending review" && isAdmin) {
-    return <ConfirmOutcome incident={incident} onConfirm={onConfirm} />;
+    return <ConfirmOutcome incident={incident} onConfirm={onConfirm} busy={busy} />;
   }
   return (
     <div>
@@ -64,10 +66,17 @@ function StatusCell({ incident, isAdmin, onConfirm }) {
 export default function Records() {
   const { t } = useLanguage();
   const { session } = useAuth();
-  const { incidents, confirmOutcome, exportConfirmed } = useIncidents();
+  const { incidents, loading, error, reload, confirmOutcome, exportConfirmed } = useIncidents();
   const isAdmin = session?.role === "admin";
 
-  const [range, setRange] = useState("Last 30 days");
+  const [range, setRange] = useState("All logged");
+  const [actionError, setActionError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  // Fetch fresh on every visit, so incidents logged on another computer show up.
+  useEffect(() => {
+    reload();
+  }, [reload]);
   const [corridor, setCorridor] = useState("All corridors");
   const [status, setStatus] = useState("All statuses");
 
@@ -86,10 +95,24 @@ export default function Records() {
 
   const confirmedCount = incidents.filter((r) => r.status === "Confirmed").length;
 
-  function handleExport() {
-    const n = exportConfirmed();
-    if (n === 0) alert("No confirmed incidents ready to export yet.");
+  async function run(action) {
+    setActionError("");
+    setBusy(true);
+    try {
+      return await action();
+    } catch (err) {
+      setActionError(err.message);
+    } finally {
+      setBusy(false);
+    }
   }
+
+  async function handleExport() {
+    const n = await run(exportConfirmed);
+    if (n === 0) setActionError("No confirmed incidents ready to export yet.");
+  }
+
+  const handleConfirm = (id, outcome) => run(() => confirmOutcome(id, outcome));
 
   return (
     <>
@@ -122,7 +145,8 @@ export default function Records() {
             {isAdmin && (
               <button
                 onClick={handleExport}
-                className="text-xs font-medium text-accent bg-surface px-2.5 py-1.5 rounded-lg"
+                disabled={busy}
+                className="text-xs font-medium text-accent bg-surface px-2.5 py-1.5 rounded-lg disabled:opacity-50"
               >
                 Export for retraining {confirmedCount > 0 ? `(${confirmedCount})` : ""}
               </button>
@@ -130,6 +154,15 @@ export default function Records() {
             <Link to="/report-incident" className="text-xs text-accent font-medium">+ Log new incident</Link>
           </div>
         </div>
+
+        {(error || actionError) && (
+          <div className="text-[13px] text-high bg-high-bg rounded-lg px-3 py-2.5 mb-3">
+            {error ? `Couldn't load incidents from the server (${error}). Is the backend running at ${API_BASE}?` : actionError}
+          </div>
+        )}
+        {loading && incidents.length === 0 && (
+          <div className="text-sm text-muted text-center py-8">Loading incidents…</div>
+        )}
 
         {/* Table: sm and up */}
         <table className="hidden sm:table w-full text-sm border-collapse">
@@ -149,7 +182,7 @@ export default function Records() {
                 <td className="py-3 border-b border-border last:border-0"><Badge level={r.priority} /></td>
                 <td className="py-3 border-b border-border last:border-0">{r.loggedBy}</td>
                 <td className="py-3 border-b border-border last:border-0">
-                  <StatusCell incident={r} isAdmin={isAdmin} onConfirm={confirmOutcome} />
+                  <StatusCell incident={r} isAdmin={isAdmin} onConfirm={handleConfirm} busy={busy} />
                 </td>
               </tr>
             ))}
@@ -182,19 +215,20 @@ export default function Records() {
               </div>
               <div className="flex justify-between items-center py-2.5">
                 <span className="text-xs text-muted">Status</span>
-                <StatusCell incident={r} isAdmin={isAdmin} onConfirm={confirmOutcome} />
+                <StatusCell incident={r} isAdmin={isAdmin} onConfirm={handleConfirm} busy={busy} />
               </div>
             </div>
           ))}
         </div>
 
-        {rows.length === 0 && (
+        {!loading && !error && rows.length === 0 && (
           <div className="text-sm text-muted text-center py-8">No logged incidents match your filters.</div>
         )}
 
         <div className="text-[11.5px] text-muted bg-surface rounded-lg px-2.5 py-2 mt-3.5 leading-relaxed">
           Status flow: <b className="text-ink">Pending review</b> (just logged, real outcome unknown) →{" "}
-          <b className="text-ink">Confirmed</b> (an admin recorded what actually happened) →{" "}
+          <b className="text-ink">Confirmed</b> (an admin recorded what actually happened; it now also counts toward
+          its corridor's priority ranking) →{" "}
           <b className="text-ink">Included in training</b> (exported as CSV for the next retraining run).
           "Estimated Priority" is the triage estimate at logging time, not the confirmed outcome.
         </div>

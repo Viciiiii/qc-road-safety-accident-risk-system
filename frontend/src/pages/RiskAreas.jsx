@@ -1,32 +1,34 @@
 import { useMemo, useState } from "react";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
+import RankingNote from "../components/ui/RankingNote";
 import { useRiskAreas } from "../api/useRiskAreas";
 import { API_BASE } from "../api/client";
 import { useLanguage } from "../i18n/LanguageContext";
 
+const SORTS = {
+  rank: { label: "Sort: Priority rank", fn: (a, b) => a.rank - b.rank },
+  crashes: { label: "Sort: Crashes", fn: (a, b) => b.crashes - a.crashes },
+  fatal: { label: "Sort: Fatal crashes", fn: (a, b) => b.fatal - a.fatal || a.rank - b.rank },
+  name: { label: "Sort: Name", fn: (a, b) => a.corridor.localeCompare(b.corridor) },
+};
+
 export default function RiskAreas() {
   const { t } = useLanguage();
-  const { data: allRiskAreas, loading, error } = useRiskAreas();
+  const { data: corridors, meta, loading, error } = useRiskAreas();
   const [riskFilter, setRiskFilter] = useState("All");
-  const [sortBy, setSortBy] = useState("volume");
+  const [sortBy, setSortBy] = useState("rank");
   const [search, setSearch] = useState("");
 
   const rows = useMemo(() => {
-    let data = [...allRiskAreas];
+    const q = search.trim().toLowerCase();
+    return corridors
+      .filter((r) => riskFilter === "All" || r.risk === riskFilter)
+      .filter((r) => !q || r.corridor.toLowerCase().includes(q))
+      .sort(SORTS[sortBy].fn);
+  }, [corridors, riskFilter, sortBy, search]);
 
-    if (riskFilter !== "All") {
-      data = data.filter((r) => r.risk === riskFilter);
-    }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      data = data.filter((r) => r.corridor.toLowerCase().includes(q));
-    }
-    data.sort((a, b) =>
-      sortBy === "volume" ? b.incidents - a.incidents : b.rateValue - a.rateValue
-    );
-    return data;
-  }, [allRiskAreas, riskFilter, sortBy, search]);
+  const selectClass = "text-sm bg-elevated border border-border rounded-lg px-3 py-2";
 
   return (
     <>
@@ -41,25 +43,18 @@ export default function RiskAreas() {
             placeholder="Search corridor..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="text-sm bg-elevated border border-border rounded-lg px-3 py-2 w-44"
+            className={`${selectClass} w-44`}
           />
-          <select
-            value={riskFilter}
-            onChange={(e) => setRiskFilter(e.target.value)}
-            className="text-sm bg-elevated border border-border rounded-lg px-3 py-2"
-          >
-            <option value="All">All risk levels</option>
+          <select value={riskFilter} onChange={(e) => setRiskFilter(e.target.value)} className={selectClass}>
+            <option value="All">All priority levels</option>
             <option value="High">High</option>
             <option value="Medium">Medium</option>
             <option value="Low">Low</option>
           </select>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="text-sm bg-elevated border border-border rounded-lg px-3 py-2"
-          >
-            <option value="volume">Sort: Incident volume</option>
-            <option value="rate">Sort: High-priority rate</option>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={selectClass}>
+            {Object.entries(SORTS).map(([key, s]) => (
+              <option key={key} value={key}>{s.label}</option>
+            ))}
           </select>
         </div>
       </div>
@@ -76,26 +71,34 @@ export default function RiskAreas() {
         {!loading && !error && (
         <>
         <div className="text-xs text-muted mb-3">
-          Showing {rows.length} of {allRiskAreas.length} monitored corridors
+          Showing {rows.length} of {corridors.length} monitored corridors · crashes from {meta.windowLabel}
         </div>
 
         {/* Table: sm and up */}
         <table className="hidden sm:table w-full text-sm border-collapse">
           <thead>
             <tr>
-              {["Corridor", "Total Incidents", "High-Priority Rate", "Risk Level"].map((h) => (
-                <th key={h} className="text-left font-medium text-muted text-xs pb-2.5 border-b border-border">
-                  {h}
-                </th>
+              {["Rank", "Corridor", "Severity score", "Crashes", "Injury", "Fatal", "Priority"].map((h) => (
+                <th key={h} className="text-left font-medium text-muted text-xs pb-2.5 border-b border-border">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.corridor}>
-                <td className="py-3 border-b border-border last:border-0">{r.corridor}</td>
-                <td className="py-3 border-b border-border last:border-0">{r.incidents.toLocaleString()}</td>
-                <td className="py-3 border-b border-border last:border-0">{r.rate}</td>
+                <td className="py-3 border-b border-border last:border-0 text-muted">{r.rank}</td>
+                <td className="py-3 border-b border-border last:border-0">
+                  {r.corridor}
+                  {r.confirmedIncidents > 0 && (
+                    <span className="text-[11px] text-muted ml-1.5" title="Staff-logged incidents confirmed by an admin">
+                      +{r.confirmedIncidents} confirmed
+                    </span>
+                  )}
+                </td>
+                <td className="py-3 border-b border-border last:border-0 font-medium">{r.score.toLocaleString()}</td>
+                <td className="py-3 border-b border-border last:border-0">{r.crashes.toLocaleString()}</td>
+                <td className="py-3 border-b border-border last:border-0">{r.injury.toLocaleString()}</td>
+                <td className="py-3 border-b border-border last:border-0">{r.fatal}</td>
                 <td className="py-3 border-b border-border last:border-0"><Badge level={r.risk} /></td>
               </tr>
             ))}
@@ -107,19 +110,19 @@ export default function RiskAreas() {
           {rows.map((r) => (
             <div key={r.corridor} className="border border-border rounded-lg px-3 py-1">
               <div className="flex justify-between items-center py-2.5 border-b border-border">
-                <span className="text-xs text-muted">Corridor</span>
-                <span>{r.corridor}</span>
+                <span className="text-xs text-muted">#{r.rank}</span>
+                <span className="font-medium">{r.corridor}</span>
               </div>
               <div className="flex justify-between items-center py-2.5 border-b border-border">
-                <span className="text-xs text-muted">Total Incidents</span>
-                <span>{r.incidents.toLocaleString()}</span>
+                <span className="text-xs text-muted">Severity score</span>
+                <span>{r.score.toLocaleString()}</span>
               </div>
               <div className="flex justify-between items-center py-2.5 border-b border-border">
-                <span className="text-xs text-muted">Rate</span>
-                <span>{r.rate}</span>
+                <span className="text-xs text-muted">Crashes · Injury · Fatal</span>
+                <span>{r.crashes.toLocaleString()} · {r.injury.toLocaleString()} · {r.fatal}</span>
               </div>
               <div className="flex justify-between items-center py-2.5">
-                <span className="text-xs text-muted">Risk</span>
+                <span className="text-xs text-muted">Priority</span>
                 <Badge level={r.risk} />
               </div>
             </div>
@@ -130,10 +133,7 @@ export default function RiskAreas() {
           <div className="text-sm text-muted text-center py-8">No corridors match your filters.</div>
         )}
 
-        <div className="text-[11.5px] text-muted bg-surface rounded-lg px-2.5 py-2 mt-3.5 leading-relaxed">
-          Excludes 1 corridor recorded as "Unknown" location in the source data. Risk Level is a tertile
-          ranking by historical High-priority rate, not a forecast.
-        </div>
+        <RankingNote meta={meta} className="mt-3.5" />
         </>
         )}
       </Card>

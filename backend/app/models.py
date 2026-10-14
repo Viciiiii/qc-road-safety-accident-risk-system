@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Numeric, ForeignKey, JSON, func
+    Column, Integer, String, Boolean, Date, DateTime, Numeric, ForeignKey, JSON, func
 )
 from sqlalchemy.orm import relationship
 from .database import Base
@@ -31,6 +31,9 @@ class Incident(Base):
     vehicle_counts = Column(JSON, nullable=False, default=dict)
     priority = Column(String(10), nullable=False)  # 'High' | 'Medium' | 'Low'
     logged_by_user_id = Column(Integer, ForeignKey("users.id"))
+    # Display name of whoever logged it. Accounts still live in the browser, so there is
+    # no users row to point at yet; added by db/03_corridor_monthly.sql.
+    logged_by_name = Column(String(100))
     status = Column(String(30), nullable=False, default="Pending review")
     confirmed_outcome = Column(String(30))  # Fatal | Non Fatal Injury | Damage to Property
     created_at = Column(DateTime, server_default=func.now())
@@ -48,3 +51,14 @@ class RiskArea(Base):
     risk_level = Column(String(10), nullable=False)  # 'High' | 'Medium' | 'Low'
     latitude = Column(Numeric(9, 6))
     longitude = Column(Numeric(9, 6))
+
+
+class CorridorMonthly(Base):
+    """Crashes per corridor per month, from the MMDA data (db/03_corridor_monthly.sql)."""
+    __tablename__ = "corridor_monthly"
+
+    corridor = Column(String(150), ForeignKey("risk_areas.corridor"), primary_key=True)
+    month = Column(Date, primary_key=True)  # first day of the month
+    damage = Column(Integer, nullable=False, default=0)
+    injury = Column(Integer, nullable=False, default=0)
+    fatal = Column(Integer, nullable=False, default=0)

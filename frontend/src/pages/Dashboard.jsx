@@ -2,32 +2,25 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
+import RankingNote from "../components/ui/RankingNote";
 import { useRiskAreas } from "../api/useRiskAreas";
 import { API_BASE } from "../api/client";
 import { useLanguage } from "../i18n/LanguageContext";
 
 export default function Dashboard() {
   const { t } = useLanguage();
-  const { data, loading, error } = useRiskAreas();
+  const { data, meta, loading, error } = useRiskAreas();
 
   const summary = useMemo(() => ({
-    corridorsMonitored: data.length,
+    corridors: data.length,
     high: data.filter((r) => r.risk === "High").length,
     medium: data.filter((r) => r.risk === "Medium").length,
     low: data.filter((r) => r.risk === "Low").length,
   }), [data]);
 
-  const topByVolume = useMemo(
-    () => [...data].sort((a, b) => b.incidents - a.incidents).slice(0, 5),
-    [data]
-  );
-  const riskAreasPreview = useMemo(
-    () => [...data].sort((a, b) => b.rateValue - a.rateValue).slice(0, 5),
-    [data]
-  );
-  const maxVolume = topByVolume.length ? Math.max(...topByVolume.map((c) => c.incidents)) : 1;
-
-  const pct = (n) => (summary.corridorsMonitored ? Math.round((n / summary.corridorsMonitored) * 100) : 0);
+  const top = data.slice(0, 5); // already sorted by rank
+  const maxScore = top.length ? top[0].score : 1;
+  const pct = (n) => (summary.corridors ? Math.round((n / summary.corridors) * 100) : 0);
 
   return (
     <>
@@ -36,11 +29,13 @@ export default function Dashboard() {
           <h1 className="text-[26px] font-semibold tracking-tight">{t("dashboard_title")}</h1>
           <p className="text-sm text-muted mt-1">{t("dashboard_subtitle")}</p>
         </div>
-        <div className="text-xs text-muted bg-surface rounded-lg px-3 py-2 text-right">
-          Based on data through Sep 2026
-          <br />
-          <Link to="/settings" className="text-accent">Model status →</Link>
-        </div>
+        {meta && (
+          <div className="text-xs text-muted bg-surface rounded-lg px-3 py-2 text-right">
+            Priorities for next month · based on {meta.windowLabel}
+            <br />
+            <Link to="/settings" className="text-accent">Model status →</Link>
+          </div>
+        )}
       </div>
 
       {loading && <div className="text-sm text-muted text-center py-8">Loading dashboard…</div>}
@@ -56,26 +51,26 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
         <Card>
           <div className="text-sm text-muted">Corridors Monitored</div>
-          <div className="text-3xl font-semibold tracking-tight mt-1.5">{summary.corridorsMonitored}</div>
-          <div className="text-xs text-muted mt-1">Top roads by incident volume, 2022–2025</div>
+          <div className="text-3xl font-semibold tracking-tight mt-1.5">{summary.corridors}</div>
+          <div className="text-xs text-muted mt-1">Ranked by 12-month severity score</div>
         </Card>
         <Card>
           <div className="text-sm text-muted flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-high" />High Risk
+            <span className="w-2 h-2 rounded-full bg-high" />High Priority
           </div>
           <div className="text-3xl font-semibold tracking-tight mt-1.5">{summary.high}</div>
-          <div className="text-xs text-muted mt-1">{pct(summary.high)}% of monitored corridors</div>
+          <div className="text-xs text-muted mt-1">Focus resources here first</div>
         </Card>
         <Card>
           <div className="text-sm text-muted flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-med" />Medium Risk
+            <span className="w-2 h-2 rounded-full bg-med" />Medium Priority
           </div>
           <div className="text-3xl font-semibold tracking-tight mt-1.5">{summary.medium}</div>
           <div className="text-xs text-muted mt-1">{pct(summary.medium)}% of monitored corridors</div>
         </Card>
         <Card>
           <div className="text-sm text-muted flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-low" />Low Risk
+            <span className="w-2 h-2 rounded-full bg-low" />Low Priority
           </div>
           <div className="text-3xl font-semibold tracking-tight mt-1.5">{summary.low}</div>
           <div className="text-xs text-muted mt-1">{pct(summary.low)}% of monitored corridors</div>
@@ -84,35 +79,34 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-3.5 mb-6">
         <Card>
-          <div className="text-[15px] font-semibold">Historical incident volume by corridor</div>
-          <div className="text-xs text-muted mb-4">Total recorded incidents, 2022–2025 (top 5 by volume)</div>
+          <div className="text-[15px] font-semibold">Highest severity scores</div>
+          <div className="text-xs text-muted mb-4">Top 5 corridors, {meta.windowLabel}</div>
           <div className="flex items-end gap-2.5 h-36">
-            {topByVolume.map((c) => (
+            {top.map((c) => (
               <div
                 key={c.corridor}
                 className="flex-1 bg-accent-soft rounded-t relative"
-                style={{ height: `${(c.incidents / maxVolume) * 100}%` }}
+                style={{ height: `${(c.score / maxScore) * 100}%` }}
+                title={`${c.corridor}: score ${c.score.toLocaleString()}`}
               >
                 <div className="absolute inset-0 bg-accent/85 rounded-t" />
               </div>
             ))}
           </div>
           <div className="flex gap-2.5 mt-2">
-            {topByVolume.map((c) => (
+            {top.map((c) => (
               <span key={c.corridor} className="flex-1 text-center text-[10.5px] text-muted">
                 {c.corridor}
                 <br />
-                {c.incidents.toLocaleString()}
+                {c.score.toLocaleString()}
               </span>
             ))}
           </div>
         </Card>
 
         <Card>
-          <div className="text-[15px] font-semibold">Risk level distribution</div>
-          <div className="text-xs text-muted mb-4">
-            {summary.corridorsMonitored} corridors, ranked by historical High-priority rate
-          </div>
+          <div className="text-[15px] font-semibold">Priority levels</div>
+          <div className="text-xs text-muted mb-4">{summary.corridors} corridors, ranked by severity score</div>
           <div className="flex flex-col gap-3.5">
             {[
               { label: "High", count: summary.high, color: "bg-high" },
@@ -136,8 +130,8 @@ export default function Dashboard() {
       <Card className="mb-6">
         <div className="flex justify-between items-center mb-3.5">
           <div>
-            <div className="text-[15px] font-semibold">Risk areas</div>
-            <div className="text-xs text-muted">Ranked by historical High-priority rate</div>
+            <div className="text-[15px] font-semibold">Priority corridors for next month</div>
+            <div className="text-xs text-muted">Top 5 by severity score</div>
           </div>
           <Link to="/risk-areas" className="text-xs text-accent font-medium">View all corridors</Link>
         </div>
@@ -146,19 +140,19 @@ export default function Dashboard() {
         <table className="hidden sm:table w-full text-sm border-collapse">
           <thead>
             <tr>
-              {["Corridor", "Total Incidents", "High-Priority Rate", "Risk Level"].map((h) => (
-                <th key={h} className="text-left font-medium text-muted text-xs pb-2.5 border-b border-border">
-                  {h}
-                </th>
+              {["Rank", "Corridor", "Severity score", "Crashes", "Fatal", "Priority"].map((h) => (
+                <th key={h} className="text-left font-medium text-muted text-xs pb-2.5 border-b border-border">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {riskAreasPreview.map((r) => (
+            {top.map((r) => (
               <tr key={r.corridor}>
+                <td className="py-3 border-b border-border last:border-0 text-muted">{r.rank}</td>
                 <td className="py-3 border-b border-border last:border-0">{r.corridor}</td>
-                <td className="py-3 border-b border-border last:border-0">{r.incidents.toLocaleString()}</td>
-                <td className="py-3 border-b border-border last:border-0">{r.rate}</td>
+                <td className="py-3 border-b border-border last:border-0 font-medium">{r.score.toLocaleString()}</td>
+                <td className="py-3 border-b border-border last:border-0">{r.crashes.toLocaleString()}</td>
+                <td className="py-3 border-b border-border last:border-0">{r.fatal}</td>
                 <td className="py-3 border-b border-border last:border-0"><Badge level={r.risk} /></td>
               </tr>
             ))}
@@ -167,33 +161,29 @@ export default function Dashboard() {
 
         {/* Stacked cards: below sm */}
         <div className="sm:hidden flex flex-col gap-2">
-          {riskAreasPreview.map((r) => (
+          {top.map((r) => (
             <div key={r.corridor} className="border border-border rounded-lg px-3 py-1">
               <div className="flex justify-between items-center py-2.5 border-b border-border">
-                <span className="text-xs text-muted">Corridor</span>
-                <span>{r.corridor}</span>
+                <span className="text-xs text-muted">#{r.rank}</span>
+                <span className="font-medium">{r.corridor}</span>
               </div>
               <div className="flex justify-between items-center py-2.5 border-b border-border">
-                <span className="text-xs text-muted">Total Incidents</span>
-                <span>{r.incidents.toLocaleString()}</span>
+                <span className="text-xs text-muted">Severity score</span>
+                <span>{r.score.toLocaleString()}</span>
               </div>
               <div className="flex justify-between items-center py-2.5 border-b border-border">
-                <span className="text-xs text-muted">Rate</span>
-                <span>{r.rate}</span>
+                <span className="text-xs text-muted">Crashes · Fatal</span>
+                <span>{r.crashes.toLocaleString()} · {r.fatal}</span>
               </div>
               <div className="flex justify-between items-center py-2.5">
-                <span className="text-xs text-muted">Risk</span>
+                <span className="text-xs text-muted">Priority</span>
                 <Badge level={r.risk} />
               </div>
             </div>
           ))}
         </div>
 
-        <div className="text-[11.5px] text-muted bg-surface rounded-lg px-2.5 py-2 mt-3.5 leading-relaxed">
-          Risk Level is a relative ranking (tertile) of historical High-priority rate across the{" "}
-          {summary.corridorsMonitored} monitored corridors — it describes 2022–2025 data, not a forecast
-          for a future period.
-        </div>
+        <RankingNote meta={meta} className="mt-3.5" />
       </Card>
 
       <Card>

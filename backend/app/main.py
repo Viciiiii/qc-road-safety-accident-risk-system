@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .ml.predictor import get_predictor
-from .routers import predict, risk_areas
+from .routers import incidents, predict, risk_areas
 
 load_dotenv()  # so CORS_ORIGINS in .env is visible below, whatever the import order
 logger = logging.getLogger("uvicorn.error")
@@ -47,6 +47,7 @@ app.add_middleware(
 
 app.include_router(risk_areas.router)
 app.include_router(predict.router)
+app.include_router(incidents.router)
 
 
 @app.get("/")

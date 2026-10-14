@@ -17,6 +17,12 @@ const MODELS = [
   { key: "naive_bayes", name: "Naive Bayes", precision: modelMetrics.naiveBayes.highPrecision },
 ];
 
+// Current local time in the format a datetime-local input expects (YYYY-MM-DDTHH:mm).
+function nowForInput() {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
 const fieldClass = "w-full text-sm bg-elevated border border-border rounded-lg px-3 py-2 mt-1";
 
 function Results({ result }) {
@@ -55,8 +61,8 @@ function Results({ result }) {
         {allAgree
           ? ""
           : "Random Forest, the most balanced of the three, is saved as this incident's estimated priority. "}
-        Saved to <b className="text-ink">Records</b>; an admin still needs to confirm the actual outcome before it
-        counts toward retraining.
+        Saved to <b className="text-ink">Records</b>. Once an admin confirms what actually happened, it counts
+        toward retraining and toward {result.corridor}'s priority ranking.
         <br />
         <br />
         Location isn't a model input — the models use time, weather, collision type, accident factor and
@@ -111,8 +117,9 @@ export default function ReportIncident() {
     setSubmitting(true);
     setSubmitError("");
     const vehicles = Object.fromEntries(options.vehicle_fields.map((f) => [f, vehicleCounts[f] ?? 0]));
+    let res;
     try {
-      const res = await apiPost("/api/predict-incident", {
+      res = await apiPost("/api/predict-incident", {
         incident_datetime: datetime,
         weather: selectedWeather,
         collision_type: selectedCollision,
@@ -120,7 +127,14 @@ export default function ReportIncident() {
         vehicles,
         corridor: selectedCorridor,
       });
-      addIncident({
+    } catch (err) {
+      // Nothing is saved if the models couldn't be reached, so no incident gets logged without a priority.
+      setSubmitError(`Couldn't get a prediction: ${err.message}. The incident was not saved.`);
+      setSubmitting(false);
+      return;
+    }
+    try {
+      await addIncident({
         corridor: selectedCorridor,
         datetime,
         weather: selectedWeather,
@@ -134,8 +148,7 @@ export default function ReportIncident() {
       setDatetime("");
       setVehicleCounts({});
     } catch (err) {
-      // Nothing is saved if the models couldn't be reached, so no incident gets logged without a priority.
-      setSubmitError(err.message);
+      setSubmitError(`Couldn't save the incident: ${err.message}. Nothing was added to Records.`);
     } finally {
       setSubmitting(false);
     }
@@ -175,6 +188,7 @@ export default function ReportIncident() {
                 <span className="text-xs text-muted">Date &amp; time</span>
                 <input
                   type="datetime-local"
+                  max={nowForInput()}
                   value={datetime}
                   onChange={(e) => setDatetime(e.target.value)}
                   required
@@ -230,7 +244,7 @@ export default function ReportIncident() {
 
               {submitError && (
                 <div className="text-[13px] text-high bg-high-bg rounded-lg px-3 py-2.5">
-                  Couldn't get a prediction: {submitError}. The incident was not saved.
+                  {submitError}
                 </div>
               )}
 
