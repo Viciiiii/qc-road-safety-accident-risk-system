@@ -21,13 +21,13 @@ export default function App() {
     <ThemeProvider>
       <LanguageProvider>
         <AuthProvider>
-          <IncidentsProvider>
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<Login />} />
 
               <Route element={<ProtectedRoute />}>
-                <Route path="/" element={<AppShell />}>
+                {/* Incidents load only once someone is signed in */}
+                <Route path="/" element={<IncidentsProvider><AppShell /></IncidentsProvider>}>
                   <Route index element={<Dashboard />} />
                   <Route path="risk-areas" element={<RiskAreas />} />
                   <Route path="map" element={<MapView />} />
@@ -42,7 +42,6 @@ export default function App() {
               </Route>
             </Routes>
           </BrowserRouter>
-          </IncidentsProvider>
         </AuthProvider>
       </LanguageProvider>
     </ThemeProvider>

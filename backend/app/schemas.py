@@ -54,8 +54,11 @@ class IncidentCreate(BaseModel):
     collision_type: str
     accident_factor: str
     vehicles: Dict[str, int] = Field(default_factory=dict)
-    priority: Priority                                  # the triage estimate shown when it was logged
-    logged_by_name: str = Field(min_length=1, max_length=100)
+    priority: Priority                                  # Random Forest's estimate (the one shown as "Estimated Priority")
+    svm_priority: Optional[Priority] = None             # SVM's estimate
+    nb_priority: Optional[Priority] = None              # Naive Bayes's estimate
+    # Ignored: the server records the signed-in account. Kept optional so older clients still work.
+    logged_by_name: Optional[str] = None
 
     @field_validator("vehicles")
     @classmethod
@@ -78,7 +81,49 @@ class IncidentOut(BaseModel):
     accident_factor: Optional[str] = None
     vehicle_counts: Dict[str, int] = Field(default_factory=dict)
     priority: Priority
+    svm_priority: Optional[Priority] = None
+    nb_priority: Optional[Priority] = None
     logged_by_name: Optional[str] = None
     status: str
     confirmed_outcome: Optional[Outcome] = None
     created_at: Optional[datetime] = None
+
+
+# ---------- accounts ----------
+
+class LoginIn(BaseModel):
+    email: str = Field(max_length=150)
+    password: str = Field(max_length=200)
+    remember: bool = False
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    email: str
+    role: str
+    disabled: bool
+    must_change_password: bool
+    created_at: Optional[datetime] = None
+    last_login_at: Optional[datetime] = None
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str = Field(max_length=200)
+    new_password: str = Field(max_length=200)
+
+
+class UserCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    email: str = Field(min_length=3, max_length=150)
+
+
+class UserUpdate(BaseModel):
+    disabled: bool
+
+
+class TempPasswordOut(BaseModel):
+    user: UserOut
+    temporary_password: str   # shown to the admin once; only its hash is stored

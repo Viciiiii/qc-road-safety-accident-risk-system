@@ -1,12 +1,10 @@
-excluded_leakage_columns:
-- Drivers Killed
-- Drivers Injured
-- Pass. Killed
-- Pass Injured
-- Pedestrian Killed
-- Pedestrian Injured
+trained_on: QC road crash data 2022-2025 (trained 2026-10-14)
+priority_mapping_source: 'Derived from Classification: Fatal=High, Non Fatal Injury=Medium, Damage to Property=Low'
+split: 80/20 stratified, random_state=42 (test set = 25,723 crashes, 92 High)
+decision_rule: High if the model's High score >= high_cutoff, otherwise the larger of Medium/Low
+cutoff_selection: 3-fold cross-validation on the training set; cutoff reaches the previous model's High recall
+excluded_leakage_columns: [Drivers Killed, Drivers Injured, Pass. Killed, Pass Injured, Pedestrian Killed, Pedestrian Injured]
 feature_columns:
-- District (City)
 - Hour
 - Minute
 - Day
@@ -27,26 +25,66 @@ feature_columns:
 - Van
 - Truck
 - Train
+- night
+- late_night
+- rush_hour
+- weekday
+- weekend
+- total_vehicles
+- two_wheelers
+- motorcycle_involved
+- heavy_involved
+- single_vehicle
+- moto_vs_heavy
+- ct_pedestrian
+- ct_head_on
+- ct_self
+- ct_hit_run
+- ct_object
+- ct_multiple
+- ct_angle
+- ct_rear
+- ct_side
+- ct_parked
+- ct_unknown
+- af_human
+- af_liquor
+- af_lost_control
+- af_defect
+- af_road
+- af_none
 models:
-  naive_bayes:
-    accuracy: 0.4703572678147961
-    file: priority_naive_bayes.pkl
-    high_precision: 0.006701289998324677
-    high_recall: 0.8695652173913043
   random_forest:
-    accuracy: 0.8161956225945651
     file: priority_random_forest.pkl
-    high_precision: 0.1284722222222222
-    high_recall: 0.40217391304347827
+    summary: 'Random Forest (100 trees, depth 15, min leaf 5); gentler SMOTE (High raised to 10% of Low)'
+    high_cutoff: 0.18429157026180643
+    accuracy: 0.8435641254908058
+    high_precision: 0.15849056603773584
+    high_recall: 0.45652173913043476
+    high_flagged: 265
+    high_caught: 42
+    high_average_precision: 0.20204402297897656
+    confusion_matrix_rows_true_cols_pred_HML: [[42, 29, 21], [185, 3922, 2168], [38, 1583, 17735]]
   svm:
-    accuracy: 0.6986354624266221
     file: priority_svm.pkl
-    high_precision: 0.02233406731676628
-    high_recall: 0.7717391304347826
-priority_labels:
-- High
-- Medium
-- Low
-priority_mapping_source: 'Derived from Classification: Fatal=High, Non Fatal Injury=Medium,
-  Damage to Property=Low'
-trained_on: QC road crash data 2022-2025, SMOTE-resampled training set
+    summary: 'Linear SVM (C=0.01) on standardised features; balanced class weights, no SMOTE'
+    high_cutoff: -0.06384282670280839
+    accuracy: 0.7772032811102904
+    high_precision: 0.04311310190369541
+    high_recall: 0.8369565217391305
+    high_flagged: 1786
+    high_caught: 77
+    high_average_precision: 0.12901436588043097
+    confusion_matrix_rows_true_cols_pred_HML: [[77, 10, 5], [1208, 4254, 813], [501, 3194, 15661]]
+  naive_bayes:
+    file: priority_naive_bayes.pkl
+    summary: 'Gaussian Naive Bayes; SMOTE (all classes balanced)'
+    high_cutoff: 0.002120266717636622
+    accuracy: 0.7211833767445477
+    high_precision: 0.021417644059153494
+    high_recall: 0.9130434782608695
+    high_flagged: 3922
+    high_caught: 84
+    high_average_precision: 0.07363756800772156
+    confusion_matrix_rows_true_cols_pred_HML: [[84, 2, 6], [2029, 2265, 1981], [1809, 1345, 16202]]
+priority_labels: [High, Medium, Low]

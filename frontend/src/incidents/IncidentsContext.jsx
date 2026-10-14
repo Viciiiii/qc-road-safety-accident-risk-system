@@ -22,7 +22,9 @@ function fromApi(i) {
     collisionType: i.collision_type,
     accidentFactor: i.accident_factor,
     vehicles: i.vehicle_counts || {},
-    priority: i.priority,
+    priority: i.priority,          // Random Forest's estimate
+    svmPriority: i.svm_priority,   // null for incidents logged before all three were saved
+    nbPriority: i.nb_priority,
     loggedBy: i.logged_by_name || "—",
     status: i.status,
     confirmedOutcome: i.confirmed_outcome,
@@ -69,7 +71,9 @@ export function IncidentsProvider({ children }) {
       accident_factor: data.accidentFactor,
       vehicles: data.vehicles,
       priority: data.priority,
-      logged_by_name: data.loggedBy,
+      svm_priority: data.svmPriority,
+      nb_priority: data.nbPriority,
+      // "Logged by" is filled in by the server from the signed-in account.
     });
     setIncidents((prev) => [fromApi(saved), ...prev]);
   }

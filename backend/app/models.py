@@ -15,8 +15,22 @@ class User(Base):
     role = Column(String(10), nullable=False)  # 'admin' | 'staff'
     disabled = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, server_default=func.now())
+    # Added by db/05_auth.sql
+    must_change_password = Column(Boolean, nullable=False, default=False)  # still on an admin-issued temporary password
+    last_login_at = Column(DateTime)
 
     incidents = relationship("Incident", back_populates="logged_by")
+
+
+class UserSession(Base):
+    """One signed-in browser. Only a hash of the cookie's token is stored (db/05_auth.sql)."""
+    __tablename__ = "user_sessions"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token_hash = Column(String(64), unique=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)  # UTC
+    created_at = Column(DateTime, server_default=func.now())
 
 
 class Incident(Base):
@@ -29,10 +43,14 @@ class Incident(Base):
     collision_type = Column(String(100))
     accident_factor = Column(String(100))
     vehicle_counts = Column(JSON, nullable=False, default=dict)
-    priority = Column(String(10), nullable=False)  # 'High' | 'Medium' | 'Low'
+    priority = Column(String(10), nullable=False)  # Random Forest estimate: 'High' | 'Medium' | 'Low'
+    # The other two models' estimates (db/04_model_estimates.sql). Empty for incidents
+    # logged before that script was added.
+    svm_priority = Column(String(10))
+    nb_priority = Column(String(10))
     logged_by_user_id = Column(Integer, ForeignKey("users.id"))
-    # Display name of whoever logged it. Accounts still live in the browser, so there is
-    # no users row to point at yet; added by db/03_corridor_monthly.sql.
+    # Display name of whoever logged it, kept as text so it survives later name changes
+    # (added by db/03_corridor_monthly.sql). logged_by_user_id links to the account.
     logged_by_name = Column(String(100))
     status = Column(String(30), nullable=False, default="Pending review")
     confirmed_outcome = Column(String(30))  # Fatal | Non Fatal Injury | Damage to Property

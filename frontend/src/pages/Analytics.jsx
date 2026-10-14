@@ -1,6 +1,10 @@
+import { useEffect } from "react";
+import { Link } from "react-router-dom";
 import Card from "../components/ui/Card";
-import { modelMetrics, featureImportance } from "../data/mockData";
+import { modelMetrics, previousMetrics, featureImportance, TEST_FATAL, FATAL_BASE_RATE } from "../data/mockData";
 import { useLanguage } from "../i18n/LanguageContext";
+import { useIncidents } from "../incidents/IncidentsContext";
+import { MODELS as LIVE_MODELS, SMALL_SAMPLE, tally } from "../incidents/estimateCheck";
 
 const models = [
   { key: "randomForest", label: "Random Forest" },
@@ -29,6 +33,135 @@ function MetricList({ rows, colorClass, max = 100, suffix = "%" }) {
   );
 }
 
+const TEST_ACCURACY = {
+  "Random Forest": modelMetrics.randomForest.accuracy,
+  SVM: modelMetrics.svm.accuracy,
+  "Naive Bayes": modelMetrics.naiveBayes.accuracy,
+};
+
+// Each model's estimates on incidents staff logged, checked against the outcome an admin confirmed.
+// Unlike the cards above (the held-out test set), these are crashes the models had never seen.
+function LiveResults() {
+  const { incidents, error, reload } = useIncidents();
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  const rows = LIVE_MODELS.map((m) => ({ ...m, ...tally(incidents, m.key) }));
+  const confirmed = rows[0].compared; // every logged incident has a Random Forest estimate
+  const cell = "py-2.5 pr-4 border-b border-border";
+
+  return (
+    <Card className="mb-6">
+      <div className="text-[15px] font-semibold">Live results on logged incidents</div>
+      <div className="text-xs text-muted mb-4">
+        Each model's estimate when a crash was reported, checked against the outcome an admin later confirmed
+      </div>
+
+      {error && (
+        <div className="text-[13px] text-high bg-high-bg rounded-lg px-3 py-2.5">Couldn't load incidents ({error}).</div>
+      )}
+
+      {!error && confirmed === 0 && (
+        <div className="text-sm text-muted py-4">
+          No confirmed incidents yet. Log crashes on <Link to="/report-incident" className="text-accent">Report Incident</Link>,
+          then confirm their real outcome in <Link to="/records" className="text-accent">Records</Link>.
+        </div>
+      )}
+
+      {!error && confirmed > 0 && (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse min-w-[560px]">
+              <thead>
+                <tr>
+                  {["Model", "Matched", "Underestimated", "Overestimated", "Fatal crashes flagged High", "Test-set accuracy"].map((h) => (
+                    <th key={h} className="text-left font-medium text-muted text-xs pb-2.5 pr-4 border-b border-border">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.key}>
+                    <td className={`${cell} font-medium`}>{r.name}</td>
+                    <td className={cell}>
+                      {r.compared ? <>{r.correct} of {r.compared} <span className="text-muted">({r.accuracy}%)</span></> : <span className="text-muted">—</span>}
+                    </td>
+                    <td className={cell}>{r.compared ? r.under : "—"}</td>
+                    <td className={cell}>{r.compared ? r.over : "—"}</td>
+                    <td className={cell}>{r.fatal ? `${r.fatalFlaggedHigh} of ${r.fatal}` : <span className="text-muted">no fatal crashes yet</span>}</td>
+                    <td className={`${cell} text-muted`}>{TEST_ACCURACY[r.name]}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="text-[11.5px] text-muted bg-surface rounded-lg px-2.5 py-2 mt-3.5 leading-relaxed">
+            {confirmed < SMALL_SAMPLE ? (
+              <>
+                <b className="text-ink">Only {confirmed} confirmed incident{confirmed === 1 ? "" : "s"} so far — too few to judge the models.</b>{" "}
+                The test-set results above remain the real evaluation; this table becomes meaningful after many real incidents.{" "}
+              </>
+            ) : null}
+            Incidents logged before the model update keep the estimate the older models gave at the time.{" "}
+            Underestimated means the model said a crash was less serious than it turned out (for example Low for a fatal
+            crash) — the costlier mistake. SVM and Naive Bayes are compared only on incidents logged after their estimates
+            started being saved.
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+// Before/after the model update, on the same held-out test set.
+function ModelUpdate() {
+  const cell = "py-2.5 pr-4 border-b border-border";
+  const change = (before, after) => {
+    const d = Math.round((after - before) * 10) / 10;
+    return <span className={d >= 0 ? "text-low" : "text-high"}>{d >= 0 ? "+" : ""}{d.toFixed(1)}</span>;
+  };
+  return (
+    <Card className="mb-6">
+      <div className="text-[15px] font-semibold">Model update: before vs after</div>
+      <div className="text-xs text-muted mb-4">
+        Same test set ({TEST_FATAL} fatal crashes). After = new features, better imbalance handling and a
+        cross-validated High cutoff
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse min-w-[560px]">
+          <thead>
+            <tr>
+              {["Model", "Flagged High", "Fatal caught", "Precision (High)", "Recall (High)"].map((h) => (
+                <th key={h} className="text-left font-medium text-muted text-xs pb-2.5 pr-4 border-b border-border">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {models.map((m) => {
+              const b = previousMetrics[m.key];
+              const a = modelMetrics[m.key];
+              return (
+                <tr key={m.key}>
+                  <td className={`${cell} font-medium`}>{m.label}</td>
+                  <td className={cell}>{b.flagged.toLocaleString()} → {a.flagged.toLocaleString()}</td>
+                  <td className={cell}>{b.caught} → {a.caught} of {TEST_FATAL}</td>
+                  <td className={cell}>{b.highPrecision.toFixed(1)}% → {a.highPrecision.toFixed(1)}% <span className="text-xs">({change(b.highPrecision, a.highPrecision)})</span></td>
+                  <td className={cell}>{b.highRecall.toFixed(1)}% → {a.highRecall.toFixed(1)}% <span className="text-xs">({change(b.highRecall, a.highRecall)})</span></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="text-[11.5px] text-muted bg-surface rounded-lg px-2.5 py-2 mt-3.5 leading-relaxed">
+        Every model raised fewer false High alarms while catching more fatal crashes. Settings and cutoffs were chosen
+        by cross-validation on the training data only; the test set was used once, for these numbers.
+      </div>
+    </Card>
+  );
+}
+
 export default function Analytics() {
   const { t } = useLanguage();
   const accuracyRows = models.map((m) => ({ label: m.label, value: modelMetrics[m.key].accuracy }));
@@ -46,13 +179,19 @@ export default function Analytics() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 mb-6">
         <Card>
           <div className="text-[15px] font-semibold">Overall accuracy</div>
-          <div className="text-xs text-muted mb-4">SMOTE-trained, evaluated on held-out real test data</div>
+          <div className="text-xs text-muted mb-4">Evaluated on held-out real test data (25,723 crashes)</div>
           <MetricList rows={accuracyRows} colorClass="bg-accent" />
         </Card>
         <Card>
           <div className="text-[15px] font-semibold">Precision on High priority</div>
           <div className="text-xs text-muted mb-4">Of everything flagged High, % actually High</div>
           <MetricList rows={precisionRows} colorClass="bg-high" />
+          <div className="text-[11.5px] text-muted bg-surface rounded-lg px-2.5 py-2 mt-3.5 leading-relaxed">
+            Only {FATAL_BASE_RATE}% of crashes are fatal, so a random guess would be right {FATAL_BASE_RATE}% of the
+            time. Random Forest's {modelMetrics.randomForest.highPrecision}% is about{" "}
+            {Math.round(modelMetrics.randomForest.highPrecision / FATAL_BASE_RATE)}× better than chance. It can't go
+            much higher because the records don't hold speed, helmet use, victim age or response time.
+          </div>
         </Card>
       </div>
 
@@ -65,6 +204,10 @@ export default function Analytics() {
           false alarms. Random Forest is the most balanced of the three.
         </div>
       </Card>
+
+      <ModelUpdate />
+
+      <LiveResults />
 
       <Card>
         <div className="text-[15px] font-semibold">Feature importance (Random Forest)</div>

@@ -6,6 +6,70 @@ import { useLanguage } from "../i18n/LanguageContext";
 import { useAuth } from "../auth/AuthContext";
 import { useIncidents } from "../incidents/IncidentsContext";
 import { API_BASE } from "../api/client";
+import { compareEstimate, OUTCOME_PRIORITY, SMALL_SAMPLE, tally } from "../incidents/estimateCheck";
+
+// Lucide "check" and "x" icons. stroke="currentColor" makes them take the pill's text colour.
+function CheckIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </svg>
+  );
+}
+
+const CHECK_STYLE = {
+  correct: { label: "Correct", Icon: CheckIcon, cls: "bg-low-bg text-low" },
+  under: { label: "Underestimated", Icon: XIcon, cls: "bg-high-bg text-high" },
+  over: { label: "Overestimated", Icon: XIcon, cls: "bg-med-bg text-med" },
+};
+
+// Random Forest's estimate (the "Estimated Priority" column) vs the confirmed outcome.
+function EstimateCheck({ incident }) {
+  const result = compareEstimate(incident.priority, incident.confirmedOutcome);
+  if (!result) return <span className="text-xs text-muted">—</span>;
+  const { label, Icon, cls } = CHECK_STYLE[result];
+  const actual = OUTCOME_PRIORITY[incident.confirmedOutcome];
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${cls}`}
+      title={`Estimated ${incident.priority}, actual ${actual} (${incident.confirmedOutcome})`}
+    >
+      <Icon />
+      {label}
+    </span>
+  );
+}
+
+// One line under the header: how often the estimate matched reality so far.
+function EstimateSummary({ incidents }) {
+  const t = tally(incidents, "priority");
+  if (t.compared === 0) {
+    return (
+      <div className="text-xs text-muted mb-3">
+        Once an admin confirms outcomes, this shows how often the estimated priority was right.
+      </div>
+    );
+  }
+  return (
+    <div className="text-xs text-muted mb-3">
+      <b className="text-ink">Estimate vs outcome:</b> the estimate matched {t.correct} of {t.compared} confirmed
+      incident{t.compared === 1 ? "" : "s"} ({t.accuracy}%) · Underestimated {t.under} · Overestimated {t.over}
+      {t.compared < SMALL_SAMPLE && <> · too few to judge the models yet</>}.{" "}
+      <Link to="/analytics" className="text-accent">Compare all three models →</Link>
+    </div>
+  );
+}
 
 const statusChoices = ["All statuses", "Pending review", "Confirmed", "Included in training"];
 const OUTCOMES = ["Fatal", "Non Fatal Injury", "Damage to Property"];
@@ -163,12 +227,13 @@ export default function Records() {
         {loading && incidents.length === 0 && (
           <div className="text-sm text-muted text-center py-8">Loading incidents…</div>
         )}
+        {!error && incidents.length > 0 && <EstimateSummary incidents={incidents} />}
 
         {/* Table: sm and up */}
         <table className="hidden sm:table w-full text-sm border-collapse">
           <thead>
             <tr>
-              {["Date & Time", "Corridor", "Collision Type", "Estimated Priority", "Logged By", "Status"].map((h) => (
+              {["Date & Time", "Corridor", "Collision Type", "Estimated Priority", "Logged By", "Status", "Estimate vs outcome"].map((h) => (
                 <th key={h} className="text-left font-medium text-muted text-xs pb-2.5 border-b border-border">{h}</th>
               ))}
             </tr>
@@ -184,6 +249,7 @@ export default function Records() {
                 <td className="py-3 border-b border-border last:border-0">
                   <StatusCell incident={r} isAdmin={isAdmin} onConfirm={handleConfirm} busy={busy} />
                 </td>
+                <td className="py-3 border-b border-border last:border-0"><EstimateCheck incident={r} /></td>
               </tr>
             ))}
           </tbody>
@@ -213,9 +279,13 @@ export default function Records() {
                 <span className="text-xs text-muted">Logged By</span>
                 <span>{r.loggedBy}</span>
               </div>
-              <div className="flex justify-between items-center py-2.5">
+              <div className="flex justify-between items-center py-2.5 border-b border-border">
                 <span className="text-xs text-muted">Status</span>
                 <StatusCell incident={r} isAdmin={isAdmin} onConfirm={handleConfirm} busy={busy} />
+              </div>
+              <div className="flex justify-between items-center py-2.5">
+                <span className="text-xs text-muted">Estimate vs outcome</span>
+                <EstimateCheck incident={r} />
               </div>
             </div>
           ))}
@@ -230,7 +300,8 @@ export default function Records() {
           <b className="text-ink">Confirmed</b> (an admin recorded what actually happened; it now also counts toward
           its corridor's priority ranking) →{" "}
           <b className="text-ink">Included in training</b> (exported as CSV for the next retraining run).
-          "Estimated Priority" is the triage estimate at logging time, not the confirmed outcome.
+          "Estimated Priority" is Random Forest's estimate at logging time; "Estimate vs outcome" checks it against
+          the confirmed outcome (Fatal = High, Injury = Medium, Damage only = Low).
         </div>
       </Card>
     </>

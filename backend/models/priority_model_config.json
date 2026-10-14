@@ -1,0 +1,72 @@
+{
+  "feature_columns": [
+    "Hour",
+    "Minute",
+    "Day",
+    "Month",
+    "Weather",
+    "Collision Type",
+    "Accident Factor",
+    "Bike",
+    "E-Bike",
+    "E-Trike",
+    "E-Scooter",
+    "Motorcycle",
+    "Tricycle",
+    "Car",
+    "PUJ",
+    "Fx / Taxi",
+    "Bus",
+    "Van",
+    "Truck",
+    "Train",
+    "night",
+    "late_night",
+    "rush_hour",
+    "weekday",
+    "weekend",
+    "total_vehicles",
+    "two_wheelers",
+    "motorcycle_involved",
+    "heavy_involved",
+    "single_vehicle",
+    "moto_vs_heavy",
+    "ct_pedestrian",
+    "ct_head_on",
+    "ct_self",
+    "ct_hit_run",
+    "ct_object",
+    "ct_multiple",
+    "ct_angle",
+    "ct_rear",
+    "ct_side",
+    "ct_parked",
+    "ct_unknown",
+    "af_human",
+    "af_liquor",
+    "af_lost_control",
+    "af_defect",
+    "af_road",
+    "af_none"
+  ],
+  "models": {
+    "random_forest": {
+      "file": "priority_random_forest.pkl",
+      "high_cutoff": 0.18429157026180643,
+      "score": "probability",
+      "summary": "Random Forest (100 trees, depth 15, min leaf 5); gentler SMOTE (High raised to 10% of Low)"
+    },
+    "svm": {
+      "file": "priority_svm.pkl",
+      "high_cutoff": -0.06384282670280839,
+      "score": "decision_function",
+      "summary": "Linear SVM (C=0.01) on standardised features; balanced class weights, no SMOTE"
+    },
+    "naive_bayes": {
+      "file": "priority_naive_bayes.pkl",
+      "high_cutoff": 0.002120266717636622,
+      "score": "probability",
+      "summary": "Gaussian Naive Bayes; SMOTE (all classes balanced)"
+    }
+  }
+}

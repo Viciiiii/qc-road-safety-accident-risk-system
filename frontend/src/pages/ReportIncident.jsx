@@ -2,14 +2,13 @@ import { useState } from "react";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
 import { useLanguage } from "../i18n/LanguageContext";
-import { useAuth } from "../auth/AuthContext";
 import { useIncidents } from "../incidents/IncidentsContext";
 import { useRiskAreas } from "../api/useRiskAreas";
 import { useFormOptions } from "../api/useFormOptions";
 import { apiPost, API_BASE } from "../api/client";
 import { modelMetrics } from "../data/mockData";
 
-// Held-out precision on High priority, from the training notebook. Shown as a
+// Held-out precision on High priority (backend/models/priority_metadata.yaml). Shown as a
 // caution whenever a model flags High, so the number isn't taken at face value.
 const MODELS = [
   { key: "random_forest", name: "Random Forest", precision: modelMetrics.randomForest.highPrecision },
@@ -39,7 +38,9 @@ function Results({ result }) {
               <span className="text-xs font-semibold w-[88px] flex-none">{m.name}</span>
               <Badge level={p.label} />
               <span className="text-xs text-muted">
-                {p.confidence != null ? `Confidence ${p.confidence}%` : "No confidence score (linear SVM)"}
+                {p.high_cutoff != null
+                  ? `Flags High at ${p.high_cutoff}% or more`
+                  : "No probability score (linear SVM)"}
               </span>
             </div>
             {p.probabilities && (
@@ -49,7 +50,8 @@ function Results({ result }) {
             )}
             {p.label === "High" && (
               <div className="text-[11px] text-muted mt-1 ml-[98px]">
-                ⚠ When {m.name} flags High, it's right only ~{m.precision}% of the time on held-out test data.
+                ⚠ When {m.name} flags High, the crash turned out fatal ~{m.precision}% of the time on held-out test
+                data (chance: 0.36%). Treat it as "check this first", not a certainty.
               </div>
             )}
           </div>
@@ -65,8 +67,9 @@ function Results({ result }) {
         toward retraining and toward {result.corridor}'s priority ranking.
         <br />
         <br />
-        Location isn't a model input — the models use time, weather, collision type, accident factor and
-        vehicles only, so <b className="text-ink">{result.corridor}</b> is saved with the record but doesn't
+        Each model flags High once its High score passes a cutoff chosen during training, so a High score well
+        under 50% can still mean High. Location isn't a model input — the models use time, weather, collision
+        type, accident factor and vehicles only, so <b className="text-ink">{result.corridor}</b> is saved with the record but doesn't
         change these predictions.
         {result.adjustments.length > 0 && (
           <>
@@ -82,7 +85,6 @@ function Results({ result }) {
 
 export default function ReportIncident() {
   const { t } = useLanguage();
-  const { session } = useAuth();
   const { addIncident } = useIncidents();
   const { data: riskAreas, loading: areasLoading, error: areasError } = useRiskAreas();
   const { options, loading: optionsLoading, error: optionsError } = useFormOptions();
@@ -142,7 +144,8 @@ export default function ReportIncident() {
         accidentFactor: selectedFactor,
         vehicles,
         priority: res.predictions.random_forest.label, // Random Forest is the logged estimate
-        loggedBy: session?.name || "Staff",
+        svmPriority: res.predictions.svm.label,         // all three are kept so each can be checked
+        nbPriority: res.predictions.naive_bayes.label,  // against the confirmed outcome later
       });
       setResult({ ...res, corridor: selectedCorridor });
       setDatetime("");

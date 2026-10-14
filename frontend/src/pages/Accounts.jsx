@@ -1,38 +1,56 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Card from "../components/ui/Card";
 import { useAuth } from "../auth/AuthContext";
-import { generateTempPassword } from "../auth/tempPassword";
+import { apiGet, apiPatch, apiPost } from "../api/client";
 import { useLanguage } from "../i18n/LanguageContext";
+
+// Accounts live in PostgreSQL. Passwords are hashed by the server; a temporary
+// password is generated there and shown here exactly once.
+function fromApi(u) {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    disabled: u.disabled,
+    temporary: u.must_change_password,
+    lastLogin: u.last_login_at,
+  };
+}
+
+function formatLastLogin(iso) {
+  if (!iso) return "Never";
+  const d = new Date(iso.endsWith("Z") ? iso : `${iso}Z`); // the server sends UTC
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
 
 const inputClass =
   "w-full text-sm bg-elevated border border-border rounded-lg px-3 py-2 mt-1 focus:outline-none focus:border-accent";
 
-function StatusPill({ disabled }) {
+function StatusPill({ account }) {
+  const { disabled, temporary } = account;
+  const style = disabled ? "bg-surface text-muted" : temporary ? "bg-med-bg text-med" : "bg-low-bg text-low";
   return (
-    <span
-      className={`inline-block text-[11px] font-semibold px-2.5 py-1 rounded-full ${
-        disabled ? "bg-surface text-muted" : "bg-low-bg text-low"
-      }`}
-    >
-      {disabled ? "Disabled" : "Active"}
+    <span className={`inline-block text-[11px] font-semibold px-2.5 py-1 rounded-full ${style}`}>
+      {disabled ? "Disabled" : temporary ? "Temporary password" : "Active"}
     </span>
   );
 }
 
-function Actions({ account, isSelf, onReset, onToggle }) {
-  const cantDisable = isSelf && !account.disabled;
+function Actions({ account, isSelf, busy, onReset, onToggle }) {
+  if (isSelf) return <span className="text-xs text-muted">You · change your password in Settings</span>;
   return (
     <div className="flex flex-wrap gap-2">
       <button
         onClick={() => onReset(account)}
-        className="text-xs font-medium text-accent bg-surface px-2.5 py-1.5 rounded-lg"
+        disabled={busy}
+        className="text-xs font-medium text-accent bg-surface px-2.5 py-1.5 rounded-lg disabled:opacity-40"
       >
         Reset password
       </button>
       <button
         onClick={() => onToggle(account)}
-        disabled={cantDisable}
-        title={cantDisable ? "You can't disable your own account" : undefined}
+        disabled={busy}
         className={`text-xs font-medium bg-surface px-2.5 py-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed ${
           account.disabled ? "text-low" : "text-high"
         }`}
@@ -54,54 +72,80 @@ function CardRow({ label, children, last }) {
 
 export default function Accounts() {
   const { t } = useLanguage();
-  const { session, accounts, createAccount, resetPassword, setAccountDisabled } = useAuth();
+  const { session } = useAuth();
 
+  const [accounts, setAccounts] = useState([]);
+  const [loadError, setLoadError] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState(() => generateTempPassword());
   const [formError, setFormError] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [busyId, setBusyId] = useState(null);
   const [notice, setNotice] = useState(null); // { message, email, password }
   const [actionError, setActionError] = useState("");
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiGet("/api/users")
+      .then((rows) => !cancelled && setAccounts(rows.map(fromApi)))
+      .catch((err) => !cancelled && setLoadError(err.message));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function upsert(u) {
+    const a = fromApi(u);
+    setAccounts((prev) => (prev.some((x) => x.id === a.id) ? prev.map((x) => (x.id === a.id ? a : x)) : [...prev, a]));
+  }
 
   function showNotice(n) {
     setNotice(n);
     setCopied(false);
   }
 
-  function handleCreate(e) {
+  async function handleCreate(e) {
     e.preventDefault();
     setFormError("");
-    const result = createAccount({ name, email, password });
-    if (!result.ok) {
-      setFormError(result.error);
-      return;
+    setCreating(true);
+    try {
+      const res = await apiPost("/api/users", { name, email });
+      upsert(res.user);
+      showNotice({ message: `Account created for ${res.user.name}.`, email: res.user.email, password: res.temporary_password });
+      setName("");
+      setEmail("");
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setCreating(false);
     }
-    showNotice({
-      message: `Account created for ${name.trim()}.`,
-      email: email.trim(),
-      password,
-    });
-    setName("");
-    setEmail("");
-    setPassword(generateTempPassword());
   }
 
-  function handleReset(account) {
+  async function handleReset(account) {
     setActionError("");
-    const newPassword = generateTempPassword();
-    resetPassword(account.id, newPassword);
-    showNotice({
-      message: `Password reset for ${account.name}.`,
-      email: account.email,
-      password: newPassword,
-    });
+    setBusyId(account.id);
+    try {
+      const res = await apiPost(`/api/users/${account.id}/reset-password`);
+      upsert(res.user);
+      showNotice({ message: `Password reset for ${account.name}.`, email: account.email, password: res.temporary_password });
+    } catch (err) {
+      setActionError(err.message);
+    } finally {
+      setBusyId(null);
+    }
   }
 
-  function handleToggle(account) {
+  async function handleToggle(account) {
     setActionError("");
-    const result = setAccountDisabled(account.id, !account.disabled);
-    if (!result.ok) setActionError(result.error);
+    setBusyId(account.id);
+    try {
+      upsert(await apiPatch(`/api/users/${account.id}`, { disabled: !account.disabled }));
+    } catch (err) {
+      setActionError(err.message);
+    } finally {
+      setBusyId(null);
+    }
   }
 
   async function copyPassword() {
@@ -124,15 +168,15 @@ export default function Accounts() {
       <Card className="mb-5">
         <div className="text-[15px] font-semibold mb-1">Create staff account</div>
         <div className="text-xs text-muted mb-4">
-          Give the staff member their email and temporary password. Both are case-sensitive, so
-          they must be typed exactly as shown.
+          The system generates a temporary password. Give it to the staff member with their email; the
+          password is case-sensitive. When they sign in, they're reminded to choose their own.
         </div>
 
         {formError && (
           <div className="text-[13px] text-high bg-high-bg rounded-lg px-3 py-2.5 mb-4">{formError}</div>
         )}
 
-        <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+        <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
           <label className="block">
             <span className="text-xs text-muted">Full name</span>
             <input
@@ -158,30 +202,13 @@ export default function Accounts() {
             />
           </label>
 
-          <label className="block">
-            <span className="text-xs text-muted">Temporary password</span>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoCapitalize="none"
-                className={`${inputClass} font-mono`}
-              />
-              <button
-                type="button"
-                onClick={() => setPassword(generateTempPassword())}
-                className="text-xs font-medium text-accent bg-surface px-3 rounded-lg mt-1 flex-none"
-              >
-                Generate
-              </button>
-            </div>
-          </label>
-
-          <div className="md:col-span-3">
-            <button type="submit" className="bg-accent text-white text-sm font-semibold px-4 py-2.5 rounded-lg">
-              Create staff account
+          <div className="md:col-span-2">
+            <button
+              type="submit"
+              disabled={creating}
+              className="bg-accent text-white text-sm font-semibold px-4 py-2.5 rounded-lg disabled:opacity-60"
+            >
+              {creating ? "Creating…" : "Create staff account"}
             </button>
           </div>
         </form>
@@ -190,15 +217,16 @@ export default function Accounts() {
       <Card>
         <div className="text-[15px] font-semibold">All accounts</div>
         <div className="text-xs text-muted mb-4">
-          Disabled accounts can't sign in until re-enabled. Resetting a password signs nobody out, but
-          the old password stops working immediately.
+          Disabling an account or resetting its password signs that person out everywhere, right away.
+          Admin accounts are created on the server (scripts/create_admin.py).
         </div>
 
         {notice && (
           <div className="bg-accent-soft rounded-lg px-3.5 py-3 mb-4 text-sm">
             <div className="font-semibold">{notice.message}</div>
             <div className="text-xs text-muted mt-1">
-              Share these with the staff member — the password is only shown here once.
+              Share these with the staff member. The password is shown only here, only once; it isn't
+              stored anywhere readable.
             </div>
             <div className="mt-2 text-[13px]">
               <span className="text-muted">Email: </span>
@@ -217,6 +245,10 @@ export default function Accounts() {
           </div>
         )}
 
+        {loadError && (
+          <div className="text-[13px] text-high bg-high-bg rounded-lg px-3 py-2.5 mb-4">Couldn't load accounts ({loadError}).</div>
+        )}
+
         {actionError && (
           <div className="text-[13px] text-high bg-high-bg rounded-lg px-3 py-2.5 mb-4">{actionError}</div>
         )}
@@ -225,7 +257,7 @@ export default function Accounts() {
         <table className="hidden sm:table w-full text-sm border-collapse">
           <thead>
             <tr>
-              {["Name", "Email", "Role", "Status", ""].map((h, i) => (
+              {["Name", "Email", "Role", "Status", "Last sign-in", ""].map((h, i) => (
                 <th key={i} className="text-left font-medium text-muted text-xs pb-2.5 border-b border-border">
                   {h}
                 </th>
@@ -238,9 +270,10 @@ export default function Accounts() {
                 <td className="py-3 border-b border-border last:border-0">{a.name}</td>
                 <td className="py-3 border-b border-border last:border-0">{a.email}</td>
                 <td className="py-3 border-b border-border last:border-0">{a.role === "admin" ? "Admin" : "Staff"}</td>
-                <td className="py-3 border-b border-border last:border-0"><StatusPill disabled={a.disabled} /></td>
+                <td className="py-3 border-b border-border last:border-0"><StatusPill account={a} /></td>
+                <td className="py-3 border-b border-border last:border-0 text-muted text-xs">{formatLastLogin(a.lastLogin)}</td>
                 <td className="py-3 border-b border-border last:border-0">
-                  <Actions account={a} isSelf={a.email === session?.email} onReset={handleReset} onToggle={handleToggle} />
+                  <Actions account={a} isSelf={a.id === session?.id} busy={busyId === a.id} onReset={handleReset} onToggle={handleToggle} />
                 </td>
               </tr>
             ))}
@@ -254,9 +287,10 @@ export default function Accounts() {
               <CardRow label="Name">{a.name}</CardRow>
               <CardRow label="Email">{a.email}</CardRow>
               <CardRow label="Role">{a.role === "admin" ? "Admin" : "Staff"}</CardRow>
-              <CardRow label="Status"><StatusPill disabled={a.disabled} /></CardRow>
+              <CardRow label="Status"><StatusPill account={a} /></CardRow>
+              <CardRow label="Last sign-in">{formatLastLogin(a.lastLogin)}</CardRow>
               <div className="py-2.5">
-                <Actions account={a} isSelf={a.email === session?.email} onReset={handleReset} onToggle={handleToggle} />
+                <Actions account={a} isSelf={a.id === session?.id} busy={busyId === a.id} onReset={handleReset} onToggle={handleToggle} />
               </div>
             </div>
           ))}

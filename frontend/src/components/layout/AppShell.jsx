@@ -1,6 +1,26 @@
 import { useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
+import { useAuth } from "../../auth/AuthContext";
+
+// Shown on every page until someone on a temporary password chooses their own.
+function TemporaryPasswordNotice() {
+  const { session } = useAuth();
+  const { pathname } = useLocation();
+  if (!session?.mustChangePassword) return null;
+  return (
+    <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-med-bg text-[13px] rounded-lg px-3.5 py-2.5 mb-5">
+      <span className="flex-1 min-w-[220px]">
+        <b>You're using a temporary password.</b> Create your own to secure your account.
+      </span>
+      {pathname !== "/settings" && (
+        <Link to="/settings#password" className="text-xs font-semibold text-white bg-accent px-3 py-1.5 rounded-lg">
+          Create password
+        </Link>
+      )}
+    </div>
+  );
+}
 
 export default function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -30,6 +50,7 @@ export default function AppShell() {
         </div>
 
         <div className="p-5 pb-14 md:p-6 xl:p-9 xl:max-w-[1320px] xl:mx-auto">
+          <TemporaryPasswordNotice />
           <Outlet />
         </div>
       </div>

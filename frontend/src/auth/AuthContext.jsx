@@ -1,120 +1,81 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { apiGet, apiPost, SESSION_EXPIRED_EVENT } from "../api/client";
 
-const SESSION_KEY = "qc_auth_session";
-const ACCOUNTS_KEY = "qc_accounts";
-
-// Demo-only "database" seeded on first load. There is no real backend yet -
-// once FastAPI/PostgreSQL exists, accounts live in a users table (with hashed
-// passwords) and every function below becomes an API call.
-const SEED_ACCOUNTS = [
-  { id: 1, name: "Admin Account", email: "admin@qc.gov.ph", role: "admin", password: "Admin@123", disabled: false, createdAt: "2026-09-01" },
-  { id: 2, name: "Staff Account", email: "staff@qc.gov.ph", role: "staff", password: "Staff@123", disabled: false, createdAt: "2026-09-01" },
-];
+// Who is signed in, checked with the backend. The session itself is an httpOnly
+// cookie the browser sends automatically; this page never sees the token, and
+// nothing about the account is kept in localStorage.
 
 const AuthContext = createContext(null);
 
-function readJSON(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
+function toSession(u) {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    mustChangePassword: u.must_change_password, // still on a temporary password from an admin
+  };
 }
 
-// Emails and passwords are both case-sensitive (exact match); only surrounding
-// whitespace is trimmed from the email. The duplicate check on account creation
-// still ignores case, so look-alikes like "Juan@x" and "juan@x" can't both exist.
-const trimEmail = (v) => v.trim();
-const sameEmailIgnoringCase = (a, b) => a.toLowerCase() === b.toLowerCase();
-const samePassword = (a, b) => a === b;
-
 export function AuthProvider({ children }) {
-  const [accounts, setAccounts] = useState(() => readJSON(ACCOUNTS_KEY, SEED_ACCOUNTS));
-  const [sessionEmail, setSessionEmail] = useState(() => readJSON(SESSION_KEY, null)?.email ?? null);
+  const [session, setSession] = useState(null);
+  const [checking, setChecking] = useState(true); // true until we know whether a session exists
 
+  // On first load, ask the server whether this browser is already signed in.
   useEffect(() => {
-    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
-  }, [accounts]);
+    let cancelled = false;
+    apiGet("/api/auth/me")
+      .then((u) => !cancelled && setSession(toSession(u)))
+      .catch(() => !cancelled && setSession(null))
+      .finally(() => !cancelled && setChecking(false));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  // The session is derived from the live account record, so disabling an
-  // account signs that user out automatically on the next render/reload.
-  const account = accounts.find((a) => a.email === sessionEmail && !a.disabled) ?? null;
-  const session = account ? { email: account.email, name: account.name, role: account.role } : null;
+  // Any 401 from the API means the session ended (expired, password reset, disabled).
+  useEffect(() => {
+    const onExpired = () => setSession(null);
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, []);
 
-  function login(role, email, password) {
-    const target = accounts.find((a) => a.email === trimEmail(email) && a.role === role);
-    if (!target || !samePassword(target.password, password)) {
-      return { ok: false, error: "Incorrect email or password for the selected role." };
+  // Returns { ok } or { ok: false, error } so the form can show the server's message.
+  const login = useCallback(async (email, password, remember) => {
+    try {
+      const u = await apiPost("/api/auth/login", { email, password, remember });
+      setSession(toSession(u));
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
     }
-    // Checked only after the credentials match, so a stranger can't probe which emails exist.
-    if (target.disabled) {
-      return { ok: false, error: "This account has been disabled. Contact your administrator." };
-    }
-    setSessionEmail(target.email);
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ email: target.email }));
-    return { ok: true };
-  }
+  }, []);
 
-  function logout() {
-    setSessionEmail(null);
-    localStorage.removeItem(SESSION_KEY);
-  }
-
-  // --- Admin actions (the Accounts page is only reachable by admins) ---
-
-  function createAccount({ name, email, password }) {
-    const cleanName = name.trim();
-    const cleanEmail = trimEmail(email);
-    if (!cleanName || !cleanEmail || !password) {
-      return { ok: false, error: "All fields are required." };
+  const logout = useCallback(async () => {
+    try {
+      await apiPost("/api/auth/logout");
+    } catch {
+      /* already signed out on the server - fine */
     }
-    if (password.length < 6) {
-      return { ok: false, error: "Password must be at least 6 characters." };
-    }
-    if (accounts.some((a) => sameEmailIgnoringCase(a.email, cleanEmail))) {
-      return { ok: false, error: "An account with that email already exists." };
-    }
-    setAccounts((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        name: cleanName,
-        email: cleanEmail,
-        role: "staff",
-        password,
-        disabled: false,
-        createdAt: new Date().toISOString().slice(0, 10),
-      },
-    ]);
-    return { ok: true };
-  }
+    setSession(null);
+  }, []);
 
-  function resetPassword(id, newPassword) {
-    setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, password: newPassword } : a)));
-    return { ok: true };
-  }
-
-  function setAccountDisabled(id, disabled) {
-    if (disabled && account?.id === id) {
-      return { ok: false, error: "You can't disable your own account." };
+  const changePassword = useCallback(async (currentPassword, newPassword) => {
+    try {
+      const u = await apiPost("/api/auth/change-password", {
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      setSession(toSession(u));
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
     }
-    setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, disabled } : a)));
-    return { ok: true };
-  }
+  }, []);
 
   return (
     <AuthContext.Provider
-      value={{
-        session,
-        isAuthenticated: !!session,
-        login,
-        logout,
-        accounts,
-        createAccount,
-        resetPassword,
-        setAccountDisabled,
-      }}
+      value={{ session, checking, isAuthenticated: !!session, login, logout, changePassword }}
     >
       {children}
     </AuthContext.Provider>

@@ -12,8 +12,8 @@ A web app that shows Quezon City LGU staff which road corridors to prioritize ne
 | **Risk Areas** | All 29 monitored corridors ranked, with search, priority filter and sorting |
 | **Map** | The corridors on a map, coloured by priority level |
 | **Report Incident** | Staff log a crash; Random Forest, SVM and Naive Bayes each predict its priority level |
-| **Records** | Incidents staff have logged (stored in PostgreSQL). An admin records the real outcome, which then counts toward the corridor ranking, and exports confirmed incidents as CSV for retraining |
-| **Analytics** | Accuracy, precision, recall and feature importance of the three models |
+| **Records** | Incidents staff have logged (stored in PostgreSQL). An admin records the real outcome, which then counts toward the corridor ranking, and exports confirmed incidents as CSV for retraining. Each confirmed incident shows whether the estimate was correct, underestimated or overestimated |
+| **Analytics** | Accuracy, precision, recall and feature importance of the three models on the test set, plus their live results on incidents logged in the app |
 | **Accounts** *(admin only)* | Create staff accounts, reset passwords, disable access |
 | **Settings** | Dark mode, English/Tagalog (navigation and headings only), model status |
 
@@ -33,15 +33,38 @@ This is a proxy: it measures how bad the outcome turned out to be, not a case-by
 
 ## Model results
 
-Measured on a held-out test set of real data. The models were trained on SMOTE-resampled data because High is so rare.
+Measured once on a held-out test set of real data (25,723 crashes, 92 of them fatal). Each model flags High when its High score reaches a cutoff chosen by cross-validation on the training data; otherwise the larger of Medium and Low wins.
 
-| Model | Accuracy | Precision on High | Recall on High |
+| Model | Accuracy | Precision on High | Recall on High | Flagged High | Fatal caught |
+|---|---|---|---|---|---|
+| Random Forest | 84.4% | 15.8% | 45.7% | 265 | 42 of 92 |
+| SVM (linear) | 77.7% | 4.3% | 83.7% | 1,786 | 77 of 92 |
+| Naive Bayes | 72.1% | 2.1% | 91.3% | 3,922 | 84 of 92 |
+
+No model wins on every measure. SVM and Naive Bayes catch more fatal crashes but raise far more false alarms; Random Forest is the most balanced. Only 0.36% of crashes are fatal, so Random Forest's 15.8% precision is about 44 times better than chance. The models use time, weather, collision type, accident factor and vehicles. They do **not** use location.
+
+### Improving precision
+
+The first version of the models (21 raw features, full SMOTE, highest score wins) scored, on the same test set:
+
+| Model | Precision on High | Recall on High | Flagged High |
 |---|---|---|---|
-| Random Forest | 81.6% | 12.8% | 40.2% |
-| SVM (linear) | 69.9% | 2.2% | 77.2% |
-| Naive Bayes | 47.0% | 0.7% | 87.0% |
+| Random Forest | 12.8% → **15.8%** | 40.2% → **45.7%** | 288 → 265 |
+| SVM (linear) | 2.2% → **4.3%** | 77.2% → **83.7%** | 3,179 → 1,786 |
+| Naive Bayes | 0.7% → **2.1%** | 87.0% → **91.3%** | 11,938 → 3,922 |
 
-No model wins outright. SVM and Naive Bayes catch more fatal crashes but raise far more false alarms; Random Forest is the most balanced. The models use time, weather, collision type, accident factor and vehicle counts. They do **not** use location.
+What was tried, in order:
+
+1. **A cutoff on its own** (no retraining), chosen by 5-fold cross-validation on the training set. It gave no real gain: for Random Forest the recall-preserving cutoff (0.395) scored 11.2% / 41.3% on the test set, about the same as before.
+2. **Feature engineering, imbalance handling and tuning**, each option scored by 3-fold cross-validation on the training set (average precision for High). Kept:
+   - New features, all known when a crash is reported: night, late night, rush hour, weekday, weekend, total vehicles, two-wheelers, motorcycle involved, bus or truck involved, motorcycle *and* bus/truck, single vehicle, and yes/no flags cleaned from the 905 messy Collision Type values and 56 Accident Factor values (hit pedestrian, head-on, self accident, drunk driving, …). District was dropped: it has one value.
+   - All vehicle columns as plain numbers. The notebook label-encoded Motorcycle and Fx / Taxi as text, so "1" and "1.0" got different codes, and "1" only appears in the 2023 file, so the code quietly carried the year.
+   - Random Forest: gentler SMOTE (High raised to 10% of the Low count). SVM: standardised features and balanced class weights instead of SMOTE, C = 0.01. Naive Bayes: unchanged SMOTE.
+   - A High cutoff per model, chosen by cross-validation so each model catches at least as many fatal crashes as its first version did.
+
+A bootstrap on the test set puts Random Forest's precision gain at +3.0 points (95% interval +0.1 to +6.0). With only 92 fatal crashes the exact size is uncertain; the SVM and Naive Bayes gains are clear. Precision is still low in absolute terms because the records lack speed, helmet or seatbelt use, victim age and response time.
+
+To retrain: `pip install -r requirements-train.txt`, then `python scripts/train_models.py <folder with the raw Excel files>`. It rebuilds all three models, the cutoffs (`priority_model_config.json`) and `priority_metadata.yaml`, and reproduces the numbers above exactly.
 
 ### Corridor ranking: tested on 2025
 
@@ -56,6 +79,10 @@ To check whether past crashes predict next month's priority corridors, each mont
 | Random Forest | 75.0% | 88.5% | 95.8% |
 
 Corridor risk in Quezon City is very stable: a corridor kept the same priority level from one month to the next about 77% of the time. None of the three models beat the simple 12-month ranking, and their differences from "same as last month" were within the margin of error (about ±5 points), so the app uses the ranking. "Precision on High" here means: of the corridors ranked High, how many really were among the 10 worst the next month.
+
+### Live results in the app
+
+When a crash is logged, all three models' estimates are saved. Once an admin confirms the real outcome, **Records** marks the Random Forest estimate as correct, underestimated (less serious than it turned out, the costlier mistake) or overestimated, and **Analytics** shows the same comparison for all three models. With only a handful of confirmed incidents these figures say little; the test-set results above remain the evaluation.
 
 ## Architecture
 
@@ -80,11 +107,12 @@ backend/
       risk_areas.py      GET  /api/risk-areas            (the corridor ranking)
       incidents.py       GET/POST /api/incidents   POST /api/incidents/{id}/confirm   POST /api/incidents/export
       predict.py         GET  /api/form-options    POST /api/predict-incident
-    ml/predictor.py      Loads the models and runs predictions
-  models/                Trained models, encoders, and form dropdown options
-  db/                    SQL scripts: create tables, seed corridors, monthly crash counts
-  scripts/               build_form_options.py, build_corridor_monthly.py
-  requirements.txt
+    ml/features.py       Feature engineering, shared by training and the API
+    ml/predictor.py      Loads the models and cutoffs, runs predictions
+  models/                Trained models, cutoffs (priority_model_config.json), encoders, form options
+  db/                    SQL scripts: create tables, seed corridors, monthly crash counts, model estimates
+  scripts/               train_models.py, build_form_options.py, build_corridor_monthly.py
+  requirements.txt       (requirements-train.txt adds what retraining needs)
   .env.example
 frontend/
   src/
@@ -112,11 +140,12 @@ psql -U postgres -d qc_road_safety -c "GRANT ALL ON SCHEMA public TO csrp2_app;"
 psql -U postgres -d qc_road_safety -f backend/db/01_create_tables.sql
 psql -U postgres -d qc_road_safety -f backend/db/02_seed_risk_areas.sql
 psql -U postgres -d qc_road_safety -f backend/db/03_corridor_monthly.sql
+psql -U postgres -d qc_road_safety -f backend/db/04_model_estimates.sql
 ```
 
-In pgAdmin, run the first two statements separately (`CREATE DATABASE` can't share a batch with other statements), then run the other four **connected to `qc_road_safety`**. Both scripts are safe to run again.
+In pgAdmin, run the first two statements separately (`CREATE DATABASE` can't share a batch with other statements), then run the other five **connected to `qc_road_safety`**. Both scripts are safe to run again.
 
-**Already set up an earlier version?** Just run `backend/db/03_corridor_monthly.sql`. It adds the monthly crash table and one column to `incidents`, and leaves your data alone.
+**Already set up an earlier version?** Run only the scripts you haven't run yet, in order: `03_corridor_monthly.sql` (monthly crash table) and `04_model_estimates.sql` (saves all three models' estimates). Both leave your existing data alone.
 
 ### 2. Backend
 
@@ -174,7 +203,7 @@ To open the app from another device or host it online: set `VITE_API_URL` to the
 1. Staff log a crash on **Report Incident**. It appears in **Records** as *Pending review*, with the models' estimate. It doesn't affect anything else yet.
 2. When the real outcome is known, an admin picks Fatal / Non Fatal Injury / Damage to Property in **Records** and confirms it (*Confirmed*). From then on it counts toward its corridor's severity score, if its date falls inside the ranking's 12-month window.
 3. The admin clicks **Export for retraining**. The CSV uses the same column names as the MMDA data, and the rows become *Included in training*.
-4. Append those rows to the historical dataset and retrain the three models. Copy the new `.pkl` files into `backend/models/`, run `python scripts/build_form_options.py <folder with the raw Excel files>`, and restart the API. Keep scikit-learn at the version you trained with and update `requirements.txt` to match.
+4. Append those rows to the historical dataset and run `python scripts/train_models.py <folder with the raw Excel files>` (see *Improving precision*). It writes the models, cutoffs and metadata into `backend/models/`. Then run `python scripts/build_form_options.py <same folder>`, update the numbers in `frontend/src/data/mockData.js` from `priority_metadata.yaml`, and restart the API. Keep scikit-learn at the version you trained with and update `requirements.txt` to match.
 
 The models' own estimate is never used as a training label; only confirmed outcomes are, so the models don't learn from their own guesses.
 
@@ -194,7 +223,8 @@ Then run the regenerated `db/03_corridor_monthly.sql` in pgAdmin. New months are
 - **Accounts don't sync.** They are stored per browser. (Logged incidents do sync; they're in PostgreSQL.)
 - **The API has no login.** The admin-only buttons are hidden in the app, but anyone who can reach the API could create, confirm or export incidents.
 - **The models ignore location.** Choosing a different street doesn't change a prediction; the street is only saved with the record.
-- **"High" is a weak alert.** Precision on High is low (table above), so most High flags are false alarms. Because of SMOTE, the percentages shown are model scores, not real-world probabilities.
+- **"High" is a weak alert.** Precision on High is low (table above), so most High flags are false alarms. The percentages shown are model scores, not real-world probabilities; that's why each model has its own High cutoff (Random Forest flags High from 18.4%).
+- **Old records keep old estimates.** Incidents logged before the model update show the estimate the first models gave at the time.
 - **The ranking looks back, not ahead.** It assumes the worst corridors of the last 12 months stay the worst next month. That held about 9 in 10 times in 2025, but it can't anticipate a sudden change on a corridor. It was tested on one year only.
 - **The 1 / 3 / 10 crash weights are a judgment call,** not derived from data. Different weights could reorder corridors near the tier boundaries.
 - **The data currently ends in December 2025,** so the ranking is a forecast for January 2026 until newer MMDA data is loaded.
@@ -211,6 +241,8 @@ Then run the regenerated `db/03_corridor_monthly.sql` in pgAdmin. New months are
 | `Could not import module "main"` | Run `uvicorn app.main:app …` from the `backend` folder |
 | `Not Found` at `/risk-areas` | The path is `/api/risk-areas` |
 | `No monthly corridor data. Run backend/db/03_corridor_monthly.sql` | Run that script in pgAdmin, connected to `qc_road_safety` |
+| `relation "corridor_monthly" does not exist` | Run `backend/db/03_corridor_monthly.sql` in pgAdmin, connected to `qc_road_safety` |
+| `column incidents.svm_priority does not exist` | Run `backend/db/04_model_estimates.sql` in pgAdmin, connected to `qc_road_safety` |
 | Page says "Couldn't load data from the server" | Backend isn't running, `VITE_API_URL` is wrong, or the page's address isn't in `CORS_ORIGINS` |
 | Warnings or errors loading the models | Install the pinned version: `pip install -r requirements.txt` (scikit-learn 1.6.1) |
 | `permission denied for schema public` | Run `GRANT ALL ON SCHEMA public TO csrp2_app;` while connected to `qc_road_safety` |

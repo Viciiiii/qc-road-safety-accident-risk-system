@@ -14,11 +14,13 @@ export default function Login() {
   const navigate = useNavigate();
   const { login, isAuthenticated } = useAuth();
   const { t } = useLanguage();
-  const [role, setRole] = useState("staff");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
 
   // Already signed in (e.g. visiting /login directly with a session already
   // stored) - skip straight to the app instead of showing the form again.
@@ -26,12 +28,18 @@ export default function Login() {
     if (isAuthenticated) navigate("/", { replace: true });
   }, [isAuthenticated, navigate]);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError("");
-    const result = login(role, email.trim(), password);
+    setBusy(true);
+    const result = await login(email.trim(), password, remember);
+    setBusy(false);
     if (!result.ok) {
-      setError(result.error);
+      setError(
+        result.error === "Failed to fetch"
+          ? "Can't reach the server. Make sure the backend is running."
+          : result.error
+      );
       return;
     }
     navigate("/");
@@ -90,23 +98,6 @@ export default function Login() {
           <h2 className="text-[22px] font-semibold tracking-tight">{t("login_welcome")}</h2>
           <p className="text-[13.5px] text-muted mt-1.5 mb-7">{t("login_subtitle")}</p>
 
-          <div className="flex bg-surface rounded-lg p-[3px] gap-0.5 mb-5">
-            {["staff", "admin"].map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRole(r)}
-                className={`flex-1 text-[13px] py-2 rounded-md transition-colors ${
-                  role === r
-                    ? "bg-elevated font-semibold shadow-sm"
-                    : "text-muted font-medium"
-                }`}
-              >
-                {r === "staff" ? t("login_staff") : t("login_admin")}
-              </button>
-            ))}
-          </div>
-
           <form onSubmit={handleSubmit}>
             {error && (
               <div className="text-[13px] text-high bg-high-bg rounded-lg px-3 py-2.5 mb-4">
@@ -154,18 +145,41 @@ export default function Login() {
 
             <div className="flex justify-between items-center mt-0.5 mb-5">
               <label className="flex items-center gap-1.5 text-[13px] text-muted">
-                <input type="checkbox" className="w-3.5 h-3.5 accent-accent" />
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="w-3.5 h-3.5 accent-accent"
+                />
                 {t("login_remember")}
               </label>
-              <a href="#" className="text-[13px] text-accent font-medium">{t("login_forgot")}</a>
+              <button
+                type="button"
+                onClick={() => setShowForgot((v) => !v)}
+                className="text-[13px] text-accent font-medium"
+              >
+                {t("login_forgot")}
+              </button>
             </div>
+
+            {showForgot && (
+              <div className="text-[12.5px] text-muted bg-surface rounded-lg px-3 py-2.5 mb-4 leading-relaxed">
+                Ask your administrator to reset your password. You'll get a temporary password to sign in
+                with, then you can choose your own.
+              </div>
+            )}
 
             <button
               type="submit"
-              className="w-full bg-accent text-white text-[14.5px] font-semibold py-3 rounded-lg hover:opacity-90 transition-opacity"
+              disabled={busy}
+              className="w-full bg-accent text-white text-[14.5px] font-semibold py-3 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-60"
             >
-              {t("login_signin")}
+              {busy ? "Signing in…" : t("login_signin")}
             </button>
+
+            <div className="text-[11.5px] text-muted text-center mt-2.5">
+              Without Remember me you're signed out after 8 hours or when the browser closes; with it, after 30 days.
+            </div>
           </form>
 
           <div className="text-xs text-muted text-center mt-6 leading-relaxed">
@@ -173,10 +187,6 @@ export default function Login() {
             administrator for access.
           </div>
 
-          <div className="text-[11.5px] text-muted bg-surface rounded-lg px-3 py-2.5 mt-4 leading-relaxed">
-            <b className="text-ink">Demo credentials</b> (case-sensitive) — Admin: admin@qc.gov.ph / Admin@123 · Staff:
-            staff@qc.gov.ph / Staff@123
-          </div>
         </div>
       </div>
     </div>

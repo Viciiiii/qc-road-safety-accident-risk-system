@@ -3,11 +3,12 @@ import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .auth import current_user
 from .ml.predictor import get_predictor
-from .routers import incidents, predict, risk_areas
+from .routers import auth, incidents, predict, risk_areas, users
 
 load_dotenv()  # so CORS_ORIGINS in .env is visible below, whatever the import order
 logger = logging.getLogger("uvicorn.error")
@@ -45,8 +46,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(risk_areas.router)
-app.include_router(predict.router)
+# Everything except signing in requires a signed-in account (admin-only routes check more).
+signed_in = [Depends(current_user)]
+app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(risk_areas.router, dependencies=signed_in)
+app.include_router(predict.router, dependencies=signed_in)
 app.include_router(incidents.router)
 
 

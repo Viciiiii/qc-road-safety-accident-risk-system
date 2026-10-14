@@ -1,4 +1,5 @@
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import Card from "../components/ui/Card";
 import { useAuth } from "../auth/AuthContext";
 import { useTheme } from "../theme/ThemeContext";
@@ -13,14 +14,96 @@ function Row({ label, value }) {
   );
 }
 
+const fieldClass =
+  "w-full text-sm bg-elevated border border-border rounded-lg px-3 py-2 mt-1 focus:outline-none focus:border-accent";
+
+function ChangePassword() {
+  const { session, changePassword } = useAuth();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+    setDone(false);
+    if (next !== confirm) {
+      setError("The new passwords don't match.");
+      return;
+    }
+    setBusy(true);
+    const result = await changePassword(current, next);
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setCurrent("");
+    setNext("");
+    setConfirm("");
+    setDone(true);
+  }
+
+  return (
+    <div id="password" className="scroll-mt-6">
+    <Card className="mb-5">
+      <div className="text-[15px] font-semibold mb-1">Change password</div>
+      <div className="text-xs text-muted mb-4">
+        {session?.mustChangePassword
+          ? "You're signed in with a temporary password from your administrator. Choose your own below."
+          : "At least 8 characters, with a letter and a number. Other browsers you're signed in on will be signed out."}
+      </div>
+      {error && <div className="text-[13px] text-high bg-high-bg rounded-lg px-3 py-2.5 mb-4">{error}</div>}
+      {done && (
+        <div className="text-[13px] text-low bg-low-bg rounded-lg px-3 py-2.5 mb-4">
+          Password changed. Use your new password next time you sign in.
+        </div>
+      )}
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+        <label className="block">
+          <span className="text-xs text-muted">{session?.mustChangePassword ? "Temporary password" : "Current password"}</span>
+          <input type="password" required value={current} onChange={(e) => setCurrent(e.target.value)}
+            autoComplete="current-password" className={fieldClass} />
+        </label>
+        <label className="block">
+          <span className="text-xs text-muted">New password</span>
+          <input type="password" required value={next} onChange={(e) => setNext(e.target.value)}
+            autoComplete="new-password" className={fieldClass} />
+        </label>
+        <label className="block">
+          <span className="text-xs text-muted">Confirm new password</span>
+          <input type="password" required value={confirm} onChange={(e) => setConfirm(e.target.value)}
+            autoComplete="new-password" className={fieldClass} />
+        </label>
+        <div className="md:col-span-3">
+          <button type="submit" disabled={busy}
+            className="bg-accent text-white text-sm font-semibold px-4 py-2.5 rounded-lg disabled:opacity-60">
+            {busy ? "Saving…" : "Change password"}
+          </button>
+        </div>
+      </form>
+    </Card>
+    </div>
+  );
+}
+
 export default function Settings() {
   const { session, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { language, changeLanguage, t } = useLanguage();
   const navigate = useNavigate();
+  const { hash } = useLocation();
 
-  function handleLogout() {
-    logout();
+  // "Create password" in the temporary-password notice links to /settings#password.
+  useEffect(() => {
+    if (hash === "#password") document.getElementById("password")?.scrollIntoView({ behavior: "smooth" });
+  }, [hash]);
+
+  async function handleLogout() {
+    await logout();
     navigate("/login", { replace: true });
   }
 
@@ -80,15 +163,16 @@ export default function Settings() {
         <Row label="Trained on" value="QC road crash data, 2022–2025 (129k records)" />
         <Row label="Models active" value="Random Forest, SVM, Naive Bayes" />
         <Row label="Retraining" value="Manual, periodic (offline)" />
-        <Row label="Last trained" value="Sep 23, 2026" />
+        <Row label="Last trained" value="Oct 14, 2026" />
       </Card>
+
+      <ChangePassword />
 
       <Card>
         <div className="text-[15px] font-semibold mb-1">Account</div>
         <Row label="Name" value={session?.name || "—"} />
         <Row label="Email" value={session?.email || "—"} />
         <Row label="Role" value={session?.role === "admin" ? "Admin" : "Staff"} />
-        <Row label="Notifications" value="Email on new High-priority report" />
 
         <button
           onClick={handleLogout}

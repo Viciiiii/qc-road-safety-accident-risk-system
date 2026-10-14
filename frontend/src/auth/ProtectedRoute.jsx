@@ -1,10 +1,13 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 
-// Wraps routes that require a signed-in session. Anyone not authenticated is
-// redirected to /login. Replace this check once real backend auth exists -
-// same idea, but reading a real token/session instead of the fake one.
+// Wraps routes that need a signed-in account. While the app is still asking the
+// server whether this browser has a session, show nothing instead of flashing the
+// sign-in page. The API checks every request too; this only decides what to show.
 export default function ProtectedRoute() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, checking } = useAuth();
+  if (checking) {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-muted">Loading…</div>;
+  }
   return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
 }
