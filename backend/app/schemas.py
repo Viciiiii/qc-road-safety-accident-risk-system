@@ -21,6 +21,11 @@ class CorridorRankOut(BaseModel):
     injury: int
     fatal: int
     confirmed_incidents: int     # of those crashes, how many came from staff-logged, admin-confirmed incidents
+    confirmed_by_outcome: Dict[str, int]   # those confirmed incidents by outcome: fatal / injury / damage
+    trend: Literal["rising", "steady", "falling"]   # last 6 months vs the 6 before, compared with the city
+    trend_change_pct: Optional[float] = None         # this corridor's own change in severity score, %
+    trend_recent_score: int
+    trend_before_score: int
     total_incidents: int         # all of 2022-2025, for context
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -33,6 +38,10 @@ class RankingOut(BaseModel):
     high_slots: int
     medium_slots: int
     confirmed_since_data: int  # counted confirmed incidents dated after data_through (newer than the MMDA data)
+    trend_recent_start: str    # first month of the trend's recent period (it runs to data_through, plus newer confirmed logs)
+    trend_before_start: str    # first month of the period it's compared with
+    trend_threshold_pct: int   # points above/below the city's change needed for Rising/Falling
+    city_change_pct: float     # citywide change in severity score between the two periods, %
     corridors: List[CorridorRankOut]
 
 

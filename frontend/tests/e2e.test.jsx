@@ -60,6 +60,26 @@ describe("Risk Areas", () => {
   });
 });
 
+describe("Trend arrows", () => {
+  beforeAll(resetIncidents);
+  it("Risk Areas shows a trend for every corridor and filters to the 4 rising ones", async () => {
+    wrap(<RiskAreas />);
+    await screen.findByText(/Showing 29 of 29 monitored corridors/);
+    const table = document.querySelector("table");
+    expect(within(table).getAllByText(/^(Rising|Steady|Falling)$/)).toHaveLength(29);
+    fireEvent.change(screen.getByDisplayValue("All trends"), { target: { value: "rising" } });
+    await screen.findByText(/Showing 4 of 29/);
+    for (const road of ["IBP Road", "Payatas Road", "Timog Ave.", "Visayas Ave."]) expect(within(table).getByText(road)).toBeTruthy();
+    expect(screen.getAllByText(/at least 15 points faster than the whole city/).length).toBeGreaterThan(0);
+  });
+  it("Dashboard lists the corridors rising faster than the city", async () => {
+    wrap(<Dashboard />);
+    await screen.findByText("Rising faster than the city");
+    expect(screen.getByText("IBP Road")).toBeTruthy();
+    expect(screen.getByText(/\+55\.6% \(207 → 322\)/)).toBeTruthy();
+  });
+});
+
 describe("Report -> confirm -> ranking -> export", () => {
   beforeAll(resetIncidents);
   it("runs the whole loop against the real backend", async () => {

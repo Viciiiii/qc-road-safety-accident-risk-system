@@ -2,7 +2,7 @@
 
 | Command | What it does |
 |---|---|
-| `npm run test:e2e` | Renders the real pages (Dashboard, Risk Areas, Report Incident, Records, Analytics) against the real API: the live ranking, the full log → confirm → ranking → export loop, estimate vs outcome counts, the icons, the model-update card, and what happens when the backend is down |
+| `npm run test:e2e` | Renders the real pages (Dashboard, Risk Areas, Report Incident, Records, Analytics) against the real API: the live ranking, the trend arrows, the full log → confirm → ranking → export loop, estimate vs outcome counts, the icons, the model-update card, and what happens when the backend is down |
 | `npm run test:browser` | Clicks through sign-in and account management in a real Chromium browser: wrong password, sign in, Remember me, creating a staff account, the temporary-password reminder, changing the password, disabling, resetting, signing out. Saves screenshots to `tests/screenshots/` |
 
 Both run against the **test database**, never your real one: they log incidents, create staff accounts, and `test:e2e` empties the incidents table before its checks.

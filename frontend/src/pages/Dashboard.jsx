@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
 import RankingNote from "../components/ui/RankingNote";
+import { TrendBadge } from "../components/ui/Trend";
 import { useRiskAreas } from "../api/useRiskAreas";
 import { API_BASE } from "../api/client";
 import { useLanguage } from "../i18n/LanguageContext";
@@ -19,6 +20,9 @@ export default function Dashboard() {
   }), [data]);
 
   const top = data.slice(0, 5); // already sorted by rank
+  const rising = data.filter((r) => r.trend === "rising");
+  const fallingCount = data.filter((r) => r.trend === "falling").length;
+  const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
   const maxScore = top.length ? top[0].score : 1;
   const pct = (n) => (summary.corridors ? Math.round((n / summary.corridors) * 100) : 0);
 
@@ -130,6 +134,41 @@ export default function Dashboard() {
       <Card className="mb-6">
         <div className="flex justify-between items-center mb-3.5">
           <div>
+            <div className="text-[15px] font-semibold">Rising faster than the city</div>
+            <div className="text-xs text-muted">
+              Severity score {meta.trendLabel} · city {sign(meta.cityChangePct)}% · {fallingCount} corridor
+              {fallingCount === 1 ? "" : "s"} falling
+            </div>
+          </div>
+          <Link to="/risk-areas" className="text-xs text-accent font-medium">See all trends</Link>
+        </div>
+        {rising.length === 0 ? (
+          <div className="text-sm text-muted py-2">No corridor is rising faster than the city right now.</div>
+        ) : (
+          <div className="flex flex-col">
+            {rising.map((r) => (
+              <div key={r.corridor} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 border-b border-border last:border-0">
+                <TrendBadge row={r} meta={meta} />
+                <span className="text-sm font-medium flex-1 min-w-[140px]">{r.corridor}</span>
+                <span className="text-xs text-muted">
+                  {r.trendChangePct != null ? `${sign(r.trendChangePct)}%` : "new"} ({r.trendBefore.toLocaleString()} →{" "}
+                  {r.trendRecent.toLocaleString()})
+                </span>
+                <Badge level={r.risk} />
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="text-[11.5px] text-muted bg-surface rounded-lg px-2.5 py-2 mt-3 leading-relaxed">
+          These corridors' severity scores grew at least {meta.trendThreshold} points faster than the city's. Some are
+          only Medium or Low priority, so this list can flag roads the ranking alone wouldn't. A Rising road usually stays
+          elevated for the next few months, but doesn't always keep climbing.
+        </div>
+      </Card>
+
+      <Card className="mb-6">
+        <div className="flex justify-between items-center mb-3.5">
+          <div>
             <div className="text-[15px] font-semibold">Priority corridors for next month</div>
             <div className="text-xs text-muted">Top 5 by severity score</div>
           </div>
@@ -140,7 +179,7 @@ export default function Dashboard() {
         <table className="hidden sm:table w-full text-sm border-collapse">
           <thead>
             <tr>
-              {["Rank", "Corridor", "Severity score", "Crashes", "Fatal", "Priority"].map((h) => (
+              {["Rank", "Corridor", "Severity score", "Crashes", "Fatal", "Trend", "Priority"].map((h) => (
                 <th key={h} className="text-left font-medium text-muted text-xs pb-2.5 border-b border-border">{h}</th>
               ))}
             </tr>
@@ -153,6 +192,7 @@ export default function Dashboard() {
                 <td className="py-3 border-b border-border last:border-0 font-medium">{r.score.toLocaleString()}</td>
                 <td className="py-3 border-b border-border last:border-0">{r.crashes.toLocaleString()}</td>
                 <td className="py-3 border-b border-border last:border-0">{r.fatal}</td>
+                <td className="py-3 border-b border-border last:border-0"><TrendBadge row={r} meta={meta} /></td>
                 <td className="py-3 border-b border-border last:border-0"><Badge level={r.risk} /></td>
               </tr>
             ))}

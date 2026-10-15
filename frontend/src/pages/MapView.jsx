@@ -52,6 +52,16 @@ export default function MapView() {
                   <br />
                   Severity score: {r.score.toLocaleString()}
                   <br />
+                  Trend:{" "}
+                  <span style={{ color: { rising: "#c0392b", falling: "#2f8f5b" }[r.trend] || "#6e6e73", fontWeight: 600 }}>
+                    {{ rising: "▲ Rising", falling: "▼ Falling" }[r.trend] || "→ Steady"}
+                  </span>
+                  {r.trendChangePct != null && (
+                    <span style={{ color: "#6e6e73" }}>
+                      {" "}({r.trendChangePct > 0 ? "+" : ""}{r.trendChangePct}% vs city {meta.cityChangePct > 0 ? "+" : ""}{meta.cityChangePct}%)
+                    </span>
+                  )}
+                  <br />
                   {r.crashes.toLocaleString()} crashes · {r.injury.toLocaleString()} injury · {r.fatal} fatal
                   <br />
                   <span style={{ color: "#6e6e73" }}>{meta.windowLabel}</span>

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
 import RankingNote from "../components/ui/RankingNote";
+import { ConfirmedTag, TrendBadge } from "../components/ui/Trend";
 import { useRiskAreas } from "../api/useRiskAreas";
 import { API_BASE } from "../api/client";
 import { useLanguage } from "../i18n/LanguageContext";
@@ -17,6 +18,7 @@ export default function RiskAreas() {
   const { t } = useLanguage();
   const { data: corridors, meta, loading, error } = useRiskAreas();
   const [riskFilter, setRiskFilter] = useState("All");
+  const [trendFilter, setTrendFilter] = useState("All");
   const [sortBy, setSortBy] = useState("rank");
   const [search, setSearch] = useState("");
 
@@ -24,9 +26,10 @@ export default function RiskAreas() {
     const q = search.trim().toLowerCase();
     return corridors
       .filter((r) => riskFilter === "All" || r.risk === riskFilter)
+      .filter((r) => trendFilter === "All" || r.trend === trendFilter)
       .filter((r) => !q || r.corridor.toLowerCase().includes(q))
       .sort(SORTS[sortBy].fn);
-  }, [corridors, riskFilter, sortBy, search]);
+  }, [corridors, riskFilter, trendFilter, sortBy, search]);
 
   const selectClass = "text-sm bg-elevated border border-border rounded-lg px-3 py-2";
 
@@ -50,6 +53,12 @@ export default function RiskAreas() {
             <option value="High">High</option>
             <option value="Medium">Medium</option>
             <option value="Low">Low</option>
+          </select>
+          <select value={trendFilter} onChange={(e) => setTrendFilter(e.target.value)} className={selectClass}>
+            <option value="All">All trends</option>
+            <option value="rising">▲ Rising</option>
+            <option value="steady">→ Steady</option>
+            <option value="falling">▼ Falling</option>
           </select>
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={selectClass}>
             {Object.entries(SORTS).map(([key, s]) => (
@@ -78,7 +87,7 @@ export default function RiskAreas() {
         <table className="hidden sm:table w-full text-sm border-collapse">
           <thead>
             <tr>
-              {["Rank", "Corridor", "Severity score", "Crashes", "Injury", "Fatal", "Priority"].map((h) => (
+              {["Rank", "Corridor", "Severity score", "Crashes", "Injury", "Fatal", "Trend", "Priority"].map((h) => (
                 <th key={h} className="text-left font-medium text-muted text-xs pb-2.5 border-b border-border">{h}</th>
               ))}
             </tr>
@@ -89,16 +98,13 @@ export default function RiskAreas() {
                 <td className="py-3 border-b border-border last:border-0 text-muted">{r.rank}</td>
                 <td className="py-3 border-b border-border last:border-0">
                   {r.corridor}
-                  {r.confirmedIncidents > 0 && (
-                    <span className="text-[11px] text-muted ml-1.5" title="Staff-logged incidents confirmed by an admin">
-                      +{r.confirmedIncidents} confirmed
-                    </span>
-                  )}
+                  <ConfirmedTag row={r} />
                 </td>
                 <td className="py-3 border-b border-border last:border-0 font-medium">{r.score.toLocaleString()}</td>
                 <td className="py-3 border-b border-border last:border-0">{r.crashes.toLocaleString()}</td>
                 <td className="py-3 border-b border-border last:border-0">{r.injury.toLocaleString()}</td>
                 <td className="py-3 border-b border-border last:border-0">{r.fatal}</td>
+                <td className="py-3 border-b border-border last:border-0"><TrendBadge row={r} meta={meta} /></td>
                 <td className="py-3 border-b border-border last:border-0"><Badge level={r.risk} /></td>
               </tr>
             ))}
@@ -111,11 +117,15 @@ export default function RiskAreas() {
             <div key={r.corridor} className="border border-border rounded-lg px-3 py-1">
               <div className="flex justify-between items-center py-2.5 border-b border-border">
                 <span className="text-xs text-muted">#{r.rank}</span>
-                <span className="font-medium">{r.corridor}</span>
+                <span className="font-medium text-right">{r.corridor}<ConfirmedTag row={r} /></span>
               </div>
               <div className="flex justify-between items-center py-2.5 border-b border-border">
                 <span className="text-xs text-muted">Severity score</span>
                 <span>{r.score.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center py-2.5 border-b border-border">
+                <span className="text-xs text-muted">Trend</span>
+                <TrendBadge row={r} meta={meta} />
               </div>
               <div className="flex justify-between items-center py-2.5 border-b border-border">
                 <span className="text-xs text-muted">Crashes · Injury · Fatal</span>

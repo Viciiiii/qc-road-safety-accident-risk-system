@@ -8,9 +8,9 @@ A web app that shows Quezon City LGU staff which road corridors to prioritize ne
 
 | Page | What it's for |
 |---|---|
-| **Dashboard** | Which corridors are High, Medium and Low priority for next month, and the corridors with the highest severity scores |
-| **Risk Areas** | All 29 monitored corridors ranked, with search, priority filter and sorting |
-| **Map** | The corridors on a map, coloured by priority level |
+| **Dashboard** | Which corridors are High, Medium and Low priority for next month, the corridors with the highest severity scores, and the corridors rising faster than the rest of the city |
+| **Risk Areas** | All 29 monitored corridors ranked, with each one's trend (▲ Rising, → Steady, ▼ Falling), search, priority and trend filters, and sorting |
+| **Map** | The corridors on a map, coloured by priority level, with each one's trend in its popup |
 | **Report Incident** | Staff log a crash; Random Forest, SVM and Naive Bayes each predict its priority level |
 | **Records** | Incidents staff have logged (stored in PostgreSQL). An admin records the real outcome, which then counts toward the corridor ranking, and exports confirmed incidents as CSV for retraining. Each confirmed incident shows whether the estimate was correct, underestimated or overestimated |
 | **Analytics** | Accuracy, precision, recall and feature importance of the three models on the test set, plus their live results on incidents logged in the app |
@@ -79,6 +79,26 @@ To check whether past crashes predict next month's priority corridors, each mont
 | Random Forest | 75.0% | 88.5% | 95.8% |
 
 Corridor risk in Quezon City is very stable: a corridor kept the same priority level from one month to the next about 77% of the time. None of the three models beat the simple 12-month ranking, and their differences from "same as last month" were within the margin of error (about ±5 points), so the app uses the ranking. "Precision on High" here means: of the corridors ranked High, how many really were among the 10 worst the next month.
+
+### Corridor trends: rising faster than the city
+
+Each corridor also gets a trend arrow. Its severity score for the last 6 months of MMDA data is compared with the 6 months before (now Jul–Dec 2025 vs Jan–Jun 2025), and that change is compared with the **citywide** change:
+
+- **▲ Rising:** at least 15 points above the city's change (city +7% → the corridor is up 22% or more)
+- **▼ Falling:** at least 15 points below it
+- **→ Steady:** in between
+
+Comparing with the city matters: November and December are busy everywhere, so comparing a corridor only with itself put 21 of 29 corridors on "rising" at the end of 2025. Confirmed incidents add their points to the period they fall in (anything newer than the MMDA data counts as recent), so a confirmed fatal crash can tip a quiet road to Rising, while a few minor ones barely move a busy road. Logs only ever add points, so they can't make a road look better.
+
+Tested on 2022–2025 (every month, 29 corridors), measuring whether the corridor was still above or below the city's trend over the following 3 months:
+
+| Arrow | Still true 3 months later | For comparison |
+|---|---|---|
+| ▲ Rising | 79% | Steady corridors: 50% (a coin flip) |
+| ▼ Falling | 74% | |
+| Both | 77% (2025 alone: 72%) | Arrows change month to month 25% of the time |
+
+A Rising corridor usually *stays* elevated, but doesn't usually keep *climbing*: roads that spike tend to settle back somewhat. So "Rising" means "grew faster than the city lately", not "will get worse every month". Several of the corridors rising at the end of 2025 (IBP Road, Payatas Road, Timog Ave., Visayas Ave.) are only Medium priority, which is the point: the trend can flag roads the ranking alone wouldn't.
 
 ### Live results in the app
 
@@ -241,7 +261,7 @@ The tests run against a **separate test database**, so your real data is never t
 
 | Suite | Command | Covers |
 |---|---|---|
-| Backend | `pytest -s` (in `backend`) | Ranking recounted with SQL, the incident flow, sign-in and permissions, predictions and cutoffs; optionally that the models reproduce the reported test-set results exactly and that the API matches the training pipeline |
+| Backend | `pytest -s` (in `backend`) | Ranking and trends recounted with SQL, the incident flow, sign-in and permissions, predictions and cutoffs; optionally that the models reproduce the reported test-set results exactly and that the API matches the training pipeline |
 | Frontend | `npm run test:e2e` (in `frontend`) | The real pages against the real API, end to end |
 | Browser | `npm run test:browser` (in `frontend`) | Sign-in and account management clicked through in Chromium |
 
@@ -252,6 +272,7 @@ The tests run against a **separate test database**, so your real data is never t
 - **"High" is a weak alert.** Precision on High is low (table above), so most High flags are false alarms. The percentages shown are model scores, not real-world probabilities; that's why each model has its own High cutoff (Random Forest flags High from 18.4%).
 - **Old records keep old estimates.** Incidents logged before the model update show the estimate the first models gave at the time.
 - **The ranking looks back, not ahead.** It assumes the worst corridors of the last 12 months stay the worst next month. That held about 9 in 10 times in 2025, but it can't anticipate a sudden change on a corridor. It was tested on one year only.
+- **Trend arrows have a hard line.** A corridor just under the 15-point line can flip to Rising with one more confirmed incident, and a Rising arrow on a quiet road can rest on a handful of crashes. The tooltip and Map popup show the actual numbers behind each arrow.
 - **The 1 / 3 / 10 crash weights are a judgment call,** not derived from data. Different weights could reorder corridors near the tier boundaries.
 - **The data currently ends in December 2025,** so the ranking is a forecast for January 2026 until newer MMDA data is loaded.
 - **A confirmed incident could be counted twice** if the same crash later appears in a newer MMDA file.
