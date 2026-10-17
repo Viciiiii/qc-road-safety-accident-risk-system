@@ -39,20 +39,20 @@ The backend keeps business logic in a few focused modules; the routers only vali
 | `database.py` | PostgreSQL connection and one database session per request |
 | `models.py` / `schemas.py` | Table definitions, and the shapes of API requests and responses |
 | `ranking.py` | The 12-month severity ranking, the trend arrows, and how confirmed incidents add to both |
-| `ml/features.py` | Feature engineering, shared by training and the live API so both build identical inputs |
-| `ml/predictor.py` | Loads the three models and their High cutoffs, turns a report into three estimates |
+| `ml/features.py` | The 85 model inputs (incl. street history) and the High rule, shared by training and the live API so both build identical inputs |
+| `ml/predictor.py` | Loads the three models, their High cutoffs and the street history, turns a report into three estimates |
 | `routers/` | `auth`, `users`, `risk_areas`, `predict`, `incidents`: one file per group of endpoints |
 
 **Offline scripts and data (`backend/scripts`, `backend/db`, `backend/models`)**
 
 | Item | Responsibility |
 | --- | --- |
-| `train_models.py` | Rebuilds the three models, their cutoffs and metadata from the raw MMDA files |
+| `train_models.py` | The fair comparison: trains on 2022–2023, tunes each model on 2024, tests once on 2025; saves models, cutoffs, street history and metadata |
 | `build_corridor_monthly.py` | Turns new MMDA files into monthly crash counts per corridor (`03_corridor_monthly.sql`) |
 | `build_form_options.py` | Builds the Report Incident dropdown values from the data |
 | `create_admin.py` | Creates or resets an admin account from the command line |
 | `db/01`–`05_*.sql` | Create the tables, seed the 29 corridors, load monthly counts, add model estimates, add sign-in |
-| `models/` | The three `.pkl` models, label encoders, `priority_model_config.json` (cutoffs), metadata |
+| `models/` | The three `.pkl` models, `priority_model_config.json` (inputs, cutoffs), `priority_street_history.json`, metadata |
 
 **Frontend (`frontend/src`)**
 
@@ -108,15 +108,17 @@ Corridor priority is a transparent rule, not a model: in a 2025 backtest the 12-
 
 ![Machine learning pipeline: training and serving](images/ml-pipeline.png)
 
-Because training and the API call the same `features.py`, a crash typed into the form becomes exactly the inputs the models learned from; a check on 392 test crashes found zero differences. Test-set results after the update:
+Because training and the API call the same `features.py`, a crash typed into the form becomes exactly the inputs the models learned from; a check on 351 corridor crashes from 2025 found zero differences.
 
-| Model | Training setup | Precision on High | Recall on High | Accuracy |
-| --- | --- | --- | --- | --- |
-| Random Forest | 100 trees, depth 15; gentler SMOTE | 15.8% | 45.7% | 84.4% |
-| SVM (linear) | scaled features, C = 0.01, class weights | 4.3% | 83.7% | 77.7% |
-| Naive Bayes | Gaussian; SMOTE | 2.1% | 91.3% | 72.1% |
+The three models are compared fairly: the same 85 inputs (time, vehicles, engineered flags, one column per category value, and each street's fatal-crash rate from 2022–2023), six settings each with the best chosen on 2024, the same cutoff rule (F2 on 2024), and one test on all 35,504 crashes from 2025:
 
-Only 0.36% of crashes are fatal, so Random Forest's precision is about 44 times better than chance; the limit is the data (no speed, helmet use, victim age or response time).
+| Model | Chosen setting | Precision on High | Recall on High | PR-AUC | Accuracy |
+| --- | --- | --- | --- | --- | --- |
+| Random Forest | 200 trees, depth 15; gentler SMOTE | 26.5% | 46.2% | 0.283 | 85.5% |
+| SVM (linear) | standardised inputs, C = 0.0003, class weights | 13.3% | 50.9% | 0.124 | 81.9% |
+| Naive Bayes | Gaussian on normal-shaped inputs; SMOTE | 5.8% | 17.0% | 0.039 | 80.5% |
+
+Only 0.3% of 2025 crashes were fatal, so Random Forest's precision is about 88 times better than chance; the limit is the data (no speed, helmet use, victim age or response time). Street history matters most for Random Forest: without it, its precision falls to 17.0% and its PR-AUC to 0.207. Naive Bayes is scored by its log-likelihood, because its probabilities round to 0% or 100%.
 
 ## API
 
@@ -176,7 +178,7 @@ Three automated suites verify the system end to end; all pass on a fresh copy of
 
 | Suite | Command | Size | What it verifies |
 | --- | --- | --- | --- |
-| Backend | `pytest -s` | 7 tests, 111 checks | Scores and trend arrows recounted independently with SQL; incident flow; sign-in, sessions, roles, lockout; each model's cutoff; optionally, that the models reproduce the published test-set results and that the API matches the training pipeline on 392 crashes |
+| Backend | `pytest -s` | 7 tests, 119 checks | Scores and trend arrows recounted independently with SQL; incident flow; sign-in, sessions, roles, lockout; each model's cutoff and the corridor input; optionally, that the models reproduce the published 2025 results and that the API matches the training pipeline on 351 crashes |
 | Frontend end to end | `npm run test:e2e` | 9 tests | Real pages against the real API: ranking, trends, log → confirm → ranking → export, estimate-vs-outcome counts, error states |
 | Browser | `npm run test:browser` | 25 steps | Sign-in and account management clicked through in Chromium, with screenshots |
 
@@ -188,6 +190,6 @@ The design targets a single-site prototype, not live deployment:
 
 - **Manual data refresh.** New MMDA files and retraining are run by hand; there is no live link to MMARAS or police records.
 - **No coordinates.** Corridors are matched by street name and placed on the map by hand; crashes on unlisted streets are left out (the 29 corridors cover about 74% of crashes).
-- **Location is not a model input.** The models estimate severity from time, weather, collision type, accident factor and vehicles.
+- **Location enters only as street history.** The models know how often crashes on a street were fatal in 2022–2023, not its design, speed limit or traffic; the history updates only when the models are retrained.
 - **Prototype-grade sign-in.** No email password reset or two-factor sign-in; the lockout counter is in memory and resets when the API restarts.
 - **One server.** No load balancing or replicas; fine for one LGU office, not for public traffic.

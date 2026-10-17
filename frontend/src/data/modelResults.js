@@ -1,29 +1,35 @@
 // Static figures the app shows that don't come from the API.
-// modelMetrics and featureImportance are the real held-out test results of the deployed
-// models (backend/models/priority_metadata.yaml, written by backend/scripts/train_models.py).
-// Test set: 25,723 crashes, 92 of them fatal. Corridor data and incidents come from the backend.
+// modelMetrics and featureImportance are the real test results of the deployed models
+// (backend/models/priority_metadata.yaml, written by backend/scripts/train_models.py).
+// Trained on 2022-2023, settings and cutoffs chosen on 2024, tested once on all 35,504 crashes
+// from 2025 (106 of them fatal). Corridor data and incidents come from the backend.
 
 export const modelMetrics = {
-  randomForest: { accuracy: 84.4, highPrecision: 15.8, highRecall: 45.7, flagged: 265, caught: 42 },
-  svm: { accuracy: 77.7, highPrecision: 4.3, highRecall: 83.7, flagged: 1786, caught: 77 },
-  naiveBayes: { accuracy: 72.1, highPrecision: 2.1, highRecall: 91.3, flagged: 3922, caught: 84 },
+  randomForest: { accuracy: 85.5, highPrecision: 26.5, highRecall: 46.2, flagged: 185, caught: 49, prAuc: 0.283, fatalCalledLow: 28 },
+  svm: { accuracy: 81.9, highPrecision: 13.3, highRecall: 50.9, flagged: 406, caught: 54, prAuc: 0.124, fatalCalledLow: 12 },
+  naiveBayes: { accuracy: 80.5, highPrecision: 5.8, highRecall: 17.0, flagged: 310, caught: 18, prAuc: 0.039, fatalCalledLow: 27 },
 };
-// The first version of the models (21 raw features, full SMOTE, highest score wins), same test set.
+// The previous version of the models (48 inputs without location, settings from a random 80/20 split,
+// cutoffs set to keep recall high), retrained on 2022-2023 and tested on the same 2025 crashes.
 export const previousMetrics = {
-  randomForest: { accuracy: 81.6, highPrecision: 12.8, highRecall: 40.2, flagged: 288, caught: 37 },
-  svm: { accuracy: 69.9, highPrecision: 2.2, highRecall: 77.2, flagged: 3179, caught: 71 },
-  naiveBayes: { accuracy: 47.0, highPrecision: 0.7, highRecall: 87.0, flagged: 11938, caught: 80 },
+  randomForest: { accuracy: 84.6, highPrecision: 12.4, highRecall: 58.5, flagged: 498, caught: 62, prAuc: 0.221 },
+  svm: { accuracy: 75.7, highPrecision: 2.9, highRecall: 87.7, flagged: 3158, caught: 93, prAuc: 0.151 },
+  naiveBayes: { accuracy: 64.9, highPrecision: 1.0, highRecall: 84.0, flagged: 8805, caught: 89, prAuc: 0.041 },
 };
-export const TEST_FATAL = 92;
-export const FATAL_BASE_RATE = 0.36; // % of all crashes that were fatal
+// Random Forest without the street-history inputs (same setting, same test): what location adds.
+export const withoutHistory = { randomForest: { highPrecision: 17.0, highRecall: 43.4, prAuc: 0.207 } };
+export const TEST_CRASHES = 35504;
+export const TEST_FATAL = 106;
+export const FATAL_BASE_RATE = 0.3; // % of 2025 crashes that were fatal (106 of 35,504)
 
 export const featureImportance = [
-  { feature: "Two-wheelers involved (count)", value: 17.7 },
-  { feature: "Motorcycle involved", value: 12.9 },
-  { feature: "Motorcycle (count)", value: 11.7 },
-  { feature: "Collision: hit pedestrian", value: 6.6 },
-  { feature: "Car (count)", value: 6.4 },
+  { feature: "Two-wheelers involved (count)", value: 14.1 },
+  { feature: "Motorcycle involved", value: 12.7 },
+  { feature: "Motorcycle (count)", value: 12.6 },
+  { feature: "Car (count)", value: 6.8 },
+  { feature: "Collision: hit pedestrian", value: 6.3 },
 ];
+export const STREET_HISTORY_IMPORTANCE = 4.6; // the four street-history inputs together
 export const vehicleFields = [
   "Bike", "E-Bike", "E-Trike", "E-Scooter", "Motorcycle", "Tricycle",
   "Car", "PUJ", "Fx / Taxi", "Bus", "Van", "Truck", "Train",

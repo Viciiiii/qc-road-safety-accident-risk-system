@@ -1,4 +1,4 @@
-"""The prediction endpoint: three models, each applying its own High cutoff."""
+"""The prediction endpoint: three models, each applying its own High cutoff; the corridor is a model input."""
 import json
 import os
 
@@ -32,12 +32,27 @@ def test_predictions(admin_client, check):
         p = r.json()["predictions"]
         check(set(p) == {"random_forest", "svm", "naive_bayes"}
               and all(v["label"] in ("High", "Medium", "Low") for v in p.values()), "   three models, valid labels")
-        for k in ("random_forest", "naive_bayes"):
-            v = p[k]
-            cut = round(cfg["models"][k]["high_cutoff"] * 100, 1)
-            check(v["high_cutoff"] == cut and (v["label"] == "High") == (v["probabilities"]["High"] >= cut - 0.05),
-                  f"   {k}: High exactly when High% >= its cutoff {cut}% (got {v['label']}, High {v['probabilities']['High']}%)")
-        check(p["svm"]["probabilities"] is None, f"   svm: no probabilities (got {p['svm']['label']})")
+        v = p["random_forest"]
+        cut = round(cfg["models"]["random_forest"]["high_cutoff"] * 100, 1)
+        check(v["high_cutoff"] == cut and (v["label"] == "High") == (v["probabilities"]["High"] >= cut - 0.05),
+              f"   random_forest: High exactly when High% >= its cutoff {cut}% (got {v['label']}, High {v['probabilities']['High']}%)")
+        check(p["svm"]["probabilities"] is None and p["naive_bayes"]["probabilities"] is None,
+              f"   svm and naive_bayes: no probabilities shown (got {p['svm']['label']}, {p['naive_bayes']['label']})")
+
+    # The corridor's crash history is an input: the same crash scores differently on different roads
+    highs = {}
+    for road in ("Commonwealth Ave.", "EDSA", "Timog Ave.", "Payatas Road"):
+        r = c.post("/api/predict-incident", json=body(corridor=road)).json()
+        highs[road] = r["predictions"]["random_forest"]["probabilities"]["High"]
+    check(len(set(highs.values())) > 1, f"same crash, different corridors -> different High% {highs}")
+    check(c.post("/api/predict-incident", json=body(corridor="Commonwealth Ave.")).json()["street_history"]["crashes"] > 1000,
+          "Commonwealth Ave. has its 2022-2023 crash history")
+    unknown = c.post("/api/predict-incident", json=body(corridor="A Street Nobody Has Heard Of"))
+    check(unknown.status_code == 200 and unknown.json()["street_history"]["crashes"] == 0,
+          "a street with no history falls back to the citywide rate")
+    no_corridor = body(); no_corridor.pop("corridor")
+    check(c.post("/api/predict-incident", json=no_corridor).status_code == 422, "missing corridor -> 422")
+    check(c.post("/api/predict-incident", json=body(corridor="")).status_code == 422, "empty corridor -> 422")
 
     check(c.post("/api/predict-incident", json=body(vehicles={"Motorcycle": 9})).status_code == 200, "9 motorcycles accepted")
     check(c.post("/api/predict-incident", json=body(collision_type="Flying Saucer")).status_code == 422, "unknown collision type -> 422")

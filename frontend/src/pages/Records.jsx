@@ -143,6 +143,7 @@ export default function Records() {
   }, [reload]);
   const [corridor, setCorridor] = useState("All corridors");
   const [status, setStatus] = useState("All statuses");
+  const [priority, setPriority] = useState("All");
 
   const corridorChoices = useMemo(
     () => ["All corridors", ...new Set(incidents.map((r) => r.corridor))],
@@ -153,9 +154,10 @@ export default function Records() {
     return incidents
       .filter((r) => withinRange(r.datetime, range))
       .filter((r) => corridor === "All corridors" || r.corridor === corridor)
+      .filter((r) => priority === "All" || r.priority === priority)
       .filter((r) => status === "All statuses" || r.status === status)
       .sort((a, b) => new Date(b.datetime) - new Date(a.datetime));
-  }, [incidents, range, corridor, status]);
+  }, [incidents, range, corridor, priority, status]);
 
   const confirmedCount = incidents.filter((r) => r.status === "Confirmed").length;
 
@@ -185,7 +187,7 @@ export default function Records() {
           <h1 className="text-[26px] font-semibold tracking-tight">{t("records_title")}</h1>
           <p className="text-sm text-muted mt-1">{t("records_subtitle")}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap justify-end gap-2 ml-auto">
           <select value={range} onChange={(e) => setRange(e.target.value)} className="text-sm bg-elevated border border-border rounded-lg px-3 py-2">
             <option>Last 7 days</option>
             <option>Last 30 days</option>
@@ -193,6 +195,12 @@ export default function Records() {
           </select>
           <select value={corridor} onChange={(e) => setCorridor(e.target.value)} className="text-sm bg-elevated border border-border rounded-lg px-3 py-2">
             {corridorChoices.map((c) => <option key={c}>{c}</option>)}
+          </select>
+          <select value={priority} onChange={(e) => setPriority(e.target.value)} className="text-sm bg-elevated border border-border rounded-lg px-3 py-2">
+            <option value="All">All priority levels</option>
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
           </select>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="text-sm bg-elevated border border-border rounded-lg px-3 py-2">
             {statusChoices.map((s) => <option key={s}>{s}</option>)}

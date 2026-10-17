@@ -1,7 +1,10 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import Card from "../components/ui/Card";
-import { modelMetrics, previousMetrics, featureImportance, TEST_FATAL, FATAL_BASE_RATE } from "../data/modelResults";
+import {
+  modelMetrics, previousMetrics, withoutHistory, featureImportance, TEST_CRASHES, TEST_FATAL, FATAL_BASE_RATE,
+  STREET_HISTORY_IMPORTANCE,
+} from "../data/modelResults";
 import { useLanguage } from "../i18n/LanguageContext";
 import { useIncidents } from "../incidents/IncidentsContext";
 import { MODELS as LIVE_MODELS, SMALL_SAMPLE, tally } from "../incidents/estimateCheck";
@@ -19,7 +22,7 @@ function MetricList({ rows, colorClass, max = 100, suffix = "%" }) {
         <div key={row.label}>
           <div className="flex justify-between text-sm mb-1.5">
             <span>{row.label}</span>
-            <span>{row.value}{suffix}</span>
+            <span>{row.value.toFixed(1)}{suffix}</span>
           </div>
           <div className="h-1.5 bg-surface rounded overflow-hidden">
             <div
@@ -125,14 +128,15 @@ function ModelUpdate() {
     <Card className="mb-6">
       <div className="text-[15px] font-semibold">Model update: before vs after</div>
       <div className="text-xs text-muted mb-4">
-        Same test set ({TEST_FATAL} fatal crashes). After = new features, better imbalance handling and a
-        cross-validated High cutoff
+        Both trained on 2022–2023 and tested on the same {TEST_CRASHES.toLocaleString()} crashes from 2025 ({TEST_FATAL} fatal).
+        After = the same inputs for all three models, including each street's crash history, with settings and cutoffs
+        chosen on 2024
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse min-w-[560px]">
+        <table className="w-full text-sm border-collapse min-w-[680px]">
           <thead>
             <tr>
-              {["Model", "Flagged High", "Fatal caught", "Precision (High)", "Recall (High)"].map((h) => (
+              {["Model", "Flagged High", "Fatal caught", "Precision (High)", "Recall (High)", "Ranking quality (PR-AUC)"].map((h) => (
                 <th key={h} className="text-left font-medium text-muted text-xs pb-2.5 pr-4 border-b border-border">{h}</th>
               ))}
             </tr>
@@ -148,6 +152,7 @@ function ModelUpdate() {
                   <td className={cell}>{b.caught} → {a.caught} of {TEST_FATAL}</td>
                   <td className={cell}>{b.highPrecision.toFixed(1)}% → {a.highPrecision.toFixed(1)}% <span className="text-xs">({change(b.highPrecision, a.highPrecision)})</span></td>
                   <td className={cell}>{b.highRecall.toFixed(1)}% → {a.highRecall.toFixed(1)}% <span className="text-xs">({change(b.highRecall, a.highRecall)})</span></td>
+                  <td className={cell}>{b.prAuc.toFixed(3)} → {a.prAuc.toFixed(3)}</td>
                 </tr>
               );
             })}
@@ -155,8 +160,11 @@ function ModelUpdate() {
         </table>
       </div>
       <div className="text-[11.5px] text-muted bg-surface rounded-lg px-2.5 py-2 mt-3.5 leading-relaxed">
-        Every model raised fewer false High alarms while catching more fatal crashes. Settings and cutoffs were chosen
-        by cross-validation on the training data only; the test set was used once, for these numbers.
+        The new models raise far fewer false High alarms, so precision went up for all three. They also catch fewer
+        fatal crashes: the old cutoffs were set to keep recall high whatever the cost in false alarms, while the new
+        ones balance both (recall still weighted above precision). PR-AUC measures ranking quality without any
+        cutoff: Random Forest clearly improved, SVM dropped slightly and Naive Bayes stayed about the same. Settings
+        and cutoffs were chosen on 2024 only; 2025 was used once, for these numbers.
       </div>
     </Card>
   );
@@ -179,7 +187,9 @@ export default function Analytics() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 mb-6">
         <Card>
           <div className="text-[15px] font-semibold">Overall accuracy</div>
-          <div className="text-xs text-muted mb-4">Evaluated on held-out real test data (25,723 crashes)</div>
+          <div className="text-xs text-muted mb-4">
+            Trained on 2022–2023, tested on all {TEST_CRASHES.toLocaleString()} crashes from 2025
+          </div>
           <MetricList rows={accuracyRows} colorClass="bg-accent" />
         </Card>
         <Card>
@@ -187,8 +197,8 @@ export default function Analytics() {
           <div className="text-xs text-muted mb-4">Of everything flagged High, % actually High</div>
           <MetricList rows={precisionRows} colorClass="bg-high" />
           <div className="text-[11.5px] text-muted bg-surface rounded-lg px-2.5 py-2 mt-3.5 leading-relaxed">
-            Only {FATAL_BASE_RATE}% of crashes are fatal, so a random guess would be right {FATAL_BASE_RATE}% of the
-            time. Random Forest's {modelMetrics.randomForest.highPrecision}% is about{" "}
+            Only {FATAL_BASE_RATE}% of crashes in 2025 were fatal, so a random guess would be right {FATAL_BASE_RATE}% of
+            the time. Random Forest's {modelMetrics.randomForest.highPrecision}% is about{" "}
             {Math.round(modelMetrics.randomForest.highPrecision / FATAL_BASE_RATE)}× better than chance. It can't go
             much higher because the records don't hold speed, helmet use, victim age or response time.
           </div>
@@ -200,8 +210,10 @@ export default function Analytics() {
         <div className="text-xs text-muted mb-4">Of all actual High-priority incidents, % correctly caught</div>
         <MetricList rows={recallRows} colorClass="bg-low" />
         <div className="text-[11.5px] text-muted bg-surface rounded-lg px-2.5 py-2 mt-3.5 leading-relaxed">
-          Trade-off: higher recall models (Naive Bayes, SVM) catch more true High cases but flood staff with
-          false alarms. Random Forest is the most balanced of the three.
+          Trade-off: SVM catches the most fatal crashes and calls the fewest of them Low (
+          {modelMetrics.svm.fatalCalledLow} vs {modelMetrics.randomForest.fatalCalledLow} for Random Forest), but most of
+          its High flags are false alarms. Random Forest is the most precise and the most balanced. Naive Bayes is the
+          weakest: it looked fine on 2024 but dropped on 2025, since it assumes every input is independent.
         </div>
       </Card>
 
@@ -213,6 +225,13 @@ export default function Analytics() {
         <div className="text-[15px] font-semibold">Feature importance (Random Forest)</div>
         <div className="text-xs text-muted mb-4">Which inputs the model relies on most</div>
         <MetricList rows={featureRows} colorClass="bg-accent" max={featureRows[0].value} />
+        <div className="text-[11.5px] text-muted bg-surface rounded-lg px-2.5 py-2 mt-3.5 leading-relaxed">
+          Street history (how often crashes on the street, and on it at that hour, were fatal in 2022–2023) is{" "}
+          {STREET_HISTORY_IMPORTANCE}% of the model's importance across its four inputs, yet it matters: without it,
+          Random Forest's precision drops from {modelMetrics.randomForest.highPrecision.toFixed(1)}% to{" "}
+          {withoutHistory.randomForest.highPrecision.toFixed(1)}% and its PR-AUC from{" "}
+          {modelMetrics.randomForest.prAuc.toFixed(3)} to {withoutHistory.randomForest.prAuc.toFixed(3)}.
+        </div>
       </Card>
     </>
   );

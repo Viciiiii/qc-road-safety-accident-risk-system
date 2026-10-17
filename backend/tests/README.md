@@ -4,8 +4,8 @@
 |---|---|
 | `test_ranking_and_incidents.py` | The corridor ranking and trends (scores and arrows recounted with SQL, tiers, window, how confirmed logs move the trend) and the incident flow: validation, pending incidents don't count, confirmed ones do (including ones newer than the MMDA data), correcting an outcome, export |
 | `test_auth.py` | Sign-in and sessions: wrong/unknown email look the same, email any case and password exact, httpOnly cookie, 8-hour and 30-day sessions, hashed tokens and passwords, staff vs admin permissions, temporary passwords, change/reset password, disabling, expiry, the 5-attempt lockout, sign out |
-| `test_predict.py` | The prediction endpoint: three models, each applying its own High cutoff, and bad input rejected |
-| `test_model_parity.py` | *(optional)* The deployed models score exactly what `priority_metadata.yaml` reports on the 25,723-crash test set, and the API gives the same answer as the training pipeline |
+| `test_predict.py` | The prediction endpoint: three models, each applying its own High cutoff; the corridor changes the estimate; bad input rejected |
+| `test_model_parity.py` | *(optional)* The deployed models score exactly what `priority_metadata.yaml` reports on the 2025 test year (35,504 crashes), and the API gives the same answer as the training pipeline |
 
 ## One-time setup: a separate test database
 

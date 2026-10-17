@@ -1,12 +1,16 @@
 {
+  "split": {
+    "train_years": [
+      2022,
+      2023
+    ],
+    "validation_year": 2024,
+    "test_year": 2025
+  },
   "feature_columns": [
     "Hour",
     "Minute",
     "Day",
-    "Month",
-    "Weather",
-    "Collision Type",
-    "Accident Factor",
     "Bike",
     "E-Bike",
     "E-Trike",
@@ -47,26 +51,111 @@
     "af_lost_control",
     "af_defect",
     "af_road",
-    "af_none"
+    "af_none",
+    "Month=April",
+    "Month=August",
+    "Month=December",
+    "Month=February",
+    "Month=January",
+    "Month=July",
+    "Month=June",
+    "Month=March",
+    "Month=May",
+    "Month=November",
+    "Month=October",
+    "Month=September",
+    "Month=Other",
+    "Weather=Fair (Day)",
+    "Weather=Fair (Night)",
+    "Weather=Other",
+    "Collision Type=Angle Impact",
+    "Collision Type=Head On",
+    "Collision Type=Hit Object",
+    "Collision Type=Hit Parked Vehicle",
+    "Collision Type=Hit Pedestrian",
+    "Collision Type=Hit and Run",
+    "Collision Type=Hit and Run / Angle Impact",
+    "Collision Type=Hit and Run / Hit Parked Vehicle",
+    "Collision Type=Hit and Run / Hit Pedestrian",
+    "Collision Type=Hit and Run / Rear End",
+    "Collision Type=Hit and Run / Side Swipe",
+    "Collision Type=Multiple Collision",
+    "Collision Type=No Collision Stated",
+    "Collision Type=Rear End",
+    "Collision Type=Self Accident",
+    "Collision Type=Side Swipe",
+    "Collision Type=Other",
+    "Accident Factor=Human Error",
+    "Accident Factor=Human Error (Lost Control)",
+    "Accident Factor=No Accident Factor (Based on the Police Blotter Book)",
+    "Accident Factor=Other",
+    "street_high_rate",
+    "street_n",
+    "street_hour_high_rate",
+    "street_hour_n"
   ],
+  "categories": {
+    "Month": [
+      "April",
+      "August",
+      "December",
+      "February",
+      "January",
+      "July",
+      "June",
+      "March",
+      "May",
+      "November",
+      "October",
+      "September"
+    ],
+    "Weather": [
+      "Fair (Day)",
+      "Fair (Night)"
+    ],
+    "Collision Type": [
+      "Angle Impact",
+      "Head On",
+      "Hit Object",
+      "Hit Parked Vehicle",
+      "Hit Pedestrian",
+      "Hit and Run",
+      "Hit and Run / Angle Impact",
+      "Hit and Run / Hit Parked Vehicle",
+      "Hit and Run / Hit Pedestrian",
+      "Hit and Run / Rear End",
+      "Hit and Run / Side Swipe",
+      "Multiple Collision",
+      "No Collision Stated",
+      "Rear End",
+      "Self Accident",
+      "Side Swipe"
+    ],
+    "Accident Factor": [
+      "Human Error",
+      "Human Error (Lost Control)",
+      "No Accident Factor (Based on the Police Blotter Book)"
+    ]
+  },
+  "history_file": "priority_street_history.json",
   "models": {
     "random_forest": {
       "file": "priority_random_forest.pkl",
-      "high_cutoff": 0.18429157026180643,
+      "high_cutoff": 0.19967173578749986,
       "score": "probability",
-      "summary": "Random Forest (100 trees, depth 15, min leaf 5); gentler SMOTE (High raised to 10% of Low)"
+      "setting": "200 trees, depth 15, min leaf 5, gentler SMOTE"
     },
     "svm": {
       "file": "priority_svm.pkl",
-      "high_cutoff": -0.06384282670280839,
+      "high_cutoff": 0.6357429218290391,
       "score": "decision_function",
-      "summary": "Linear SVM (C=0.01) on standardised features; balanced class weights, no SMOTE"
+      "setting": "linear, C = 0.0003, standardised inputs, balanced class weights"
     },
     "naive_bayes": {
       "file": "priority_naive_bayes.pkl",
-      "high_cutoff": 0.002120266717636622,
-      "score": "probability",
-      "summary": "Gaussian Naive Bayes; SMOTE (all classes balanced)"
+      "high_cutoff": 47.60526875202295,
+      "score": "log_odds",
+      "setting": "Gaussian on normal-shaped inputs, SMOTE"
     }
   }
 }

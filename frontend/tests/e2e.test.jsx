@@ -201,15 +201,19 @@ describe("Model update", () => {
     wrap(<Analytics />);
     await screen.findByText("Model update: before vs after");
     const rowOf = (name) => [...document.querySelectorAll("tr")].find((tr) => tr.firstChild?.textContent === name).textContent;
-    expect(rowOf("Random Forest")).toContain("12.8% → 15.8%");
-    expect(rowOf("Naive Bayes")).toContain("11,938 → 3,922");
-    expect(screen.getByText(/about 44× better than chance/)).toBeTruthy();
+    expect(rowOf("Random Forest")).toContain("12.4% → 26.5%");
+    expect(rowOf("Naive Bayes")).toContain("8,805 → 310");
+    expect(rowOf("Random Forest")).toContain("0.221 → 0.283");
+    expect(screen.getByText(/about 88× better than chance/)).toBeTruthy();
+    expect(screen.getByText(/without it,\s+Random Forest's precision drops from 26.5% to\s+17.0%/)).toBeTruthy();
     cleanup();
 
     const r = await fetch(`${API}/api/predict-incident`, { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ incident_datetime: "2025-11-20T23:30", weather: "Fair (Night)", collision_type: "Hit Pedestrian",
-        accident_factor: "Human Error", vehicles: { Motorcycle: 1, Truck: 1 } }) }).then((x) => x.json());
-    expect(r.predictions.random_forest.high_cutoff).toBe(18.4);
+        accident_factor: "Human Error", vehicles: { Motorcycle: 1, Truck: 1 }, corridor: "EDSA" }) }).then((x) => x.json());
+    expect(r.predictions.random_forest.high_cutoff).toBe(20);
     expect(r.predictions.svm.high_cutoff).toBeNull();
+    expect(r.predictions.naive_bayes.high_cutoff).toBeNull();
+    expect(r.street_history.crashes).toBeGreaterThan(1000);
   });
 });

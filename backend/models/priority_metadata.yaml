@@ -1,90 +1,200 @@
-trained_on: QC road crash data 2022-2025 (trained 2026-10-14)
+trained_on: QC road crash data 2022-2025 (trained 2026-10-17)
 priority_mapping_source: 'Derived from Classification: Fatal=High, Non Fatal Injury=Medium, Damage to Property=Low'
-split: 80/20 stratified, random_state=42 (test set = 25,723 crashes, 92 High)
+split: train 2022-2023 (58445 crashes, 230 fatal); settings and cutoffs chosen on 2024 (34665 crashes, 125 fatal); test 2025 (35504 crashes, 106 fatal; 25960 on the 29 corridors, 71 fatal)
 decision_rule: High if the model's High score >= high_cutoff, otherwise the larger of Medium/Low
-cutoff_selection: 3-fold cross-validation on the training set; cutoff reaches the previous model's High recall
+model_selection: 6 settings per model, best High PR-AUC on 2024; cutoff maximises F2 on 2024
+inputs: 85 (time, vehicles, engineered flags, one column per category value, street history)
 excluded_leakage_columns: [Drivers Killed, Drivers Injured, Pass. Killed, Pass Injured, Pedestrian Killed, Pedestrian Injured]
-feature_columns:
-- Hour
-- Minute
-- Day
-- Month
-- Weather
-- Collision Type
-- Accident Factor
-- Bike
-- E-Bike
-- E-Trike
-- E-Scooter
-- Motorcycle
-- Tricycle
-- Car
-- PUJ
-- Fx / Taxi
-- Bus
-- Van
-- Truck
-- Train
-- night
-- late_night
-- rush_hour
-- weekday
-- weekend
-- total_vehicles
-- two_wheelers
-- motorcycle_involved
-- heavy_involved
-- single_vehicle
-- moto_vs_heavy
-- ct_pedestrian
-- ct_head_on
-- ct_self
-- ct_hit_run
-- ct_object
-- ct_multiple
-- ct_angle
-- ct_rear
-- ct_side
-- ct_parked
-- ct_unknown
-- af_human
-- af_liquor
-- af_lost_control
-- af_defect
-- af_road
-- af_none
 models:
   random_forest:
     file: priority_random_forest.pkl
-    summary: 'Random Forest (100 trees, depth 15, min leaf 5); gentler SMOTE (High raised to 10% of Low)'
-    high_cutoff: 0.18429157026180643
-    accuracy: 0.8435641254908058
-    high_precision: 0.15849056603773584
-    high_recall: 0.45652173913043476
-    high_flagged: 265
-    high_caught: 42
-    high_average_precision: 0.20204402297897656
-    confusion_matrix_rows_true_cols_pred_HML: [[42, 29, 21], [185, 3922, 2168], [38, 1583, 17735]]
+    setting: '200 trees, depth 15, min leaf 5, gentler SMOTE'
+    high_cutoff: 0.19967173578749986
+    validation_average_precision: 0.315723
+    accuracy: 0.854833
+    balanced_accuracy: 0.68137
+    high_precision: 0.264865
+    high_recall: 0.462264
+    high_flagged: 185
+    high_caught: 49
+    high_total: 106
+    high_average_precision: 0.283305
+    fatal_called_low: 28
+    high_flags_serious: 0.8
+    medium_precision: 0.712278
+    medium_recall: 0.666469
+    low_precision: 0.899887
+    low_recall: 0.915377
+    macro_f1: 0.644316
+    confusion_matrix: [[49, 29, 28], [99, 5627, 2717], [37, 2244, 24674]]
   svm:
     file: priority_svm.pkl
-    summary: 'Linear SVM (C=0.01) on standardised features; balanced class weights, no SMOTE'
-    high_cutoff: -0.06384282670280839
-    accuracy: 0.7772032811102904
-    high_precision: 0.04311310190369541
-    high_recall: 0.8369565217391305
-    high_flagged: 1786
-    high_caught: 77
-    high_average_precision: 0.12901436588043097
-    confusion_matrix_rows_true_cols_pred_HML: [[77, 10, 5], [1208, 4254, 813], [501, 3194, 15661]]
+    setting: 'linear, C = 0.0003, standardised inputs, balanced class weights'
+    high_cutoff: 0.6357429218290391
+    validation_average_precision: 0.209722
+    accuracy: 0.818894
+    balanced_accuracy: 0.722683
+    high_precision: 0.133005
+    high_recall: 0.509434
+    high_flagged: 406
+    high_caught: 54
+    high_total: 106
+    high_average_precision: 0.124205
+    fatal_called_low: 12
+    high_flags_serious: 0.785714
+    medium_precision: 0.586572
+    medium_recall: 0.847448
+    low_precision: 0.954803
+    low_recall: 0.811167
+    macro_f1: 0.593787
+    confusion_matrix: [[54, 40, 12], [265, 7155, 1023], [87, 5003, 21865]]
   naive_bayes:
     file: priority_naive_bayes.pkl
-    summary: 'Gaussian Naive Bayes; SMOTE (all classes balanced)'
-    high_cutoff: 0.002120266717636622
-    accuracy: 0.7211833767445477
-    high_precision: 0.021417644059153494
-    high_recall: 0.9130434782608695
-    high_flagged: 3922
-    high_caught: 84
-    high_average_precision: 0.07363756800772156
-    confusion_matrix_rows_true_cols_pred_HML: [[84, 2, 6], [2029, 2265, 1981], [1809, 1345, 16202]]
+    setting: 'Gaussian on normal-shaped inputs, SMOTE'
+    high_cutoff: 47.60526875202295
+    validation_average_precision: 0.116962
+    accuracy: 0.80529
+    balanced_accuracy: 0.486706
+    high_precision: 0.058065
+    high_recall: 0.169811
+    high_flagged: 310
+    high_caught: 18
+    high_total: 106
+    high_average_precision: 0.038919
+    fatal_called_low: 27
+    high_flags_serious: 0.548387
+    medium_precision: 0.713997
+    medium_recall: 0.335307
+    low_precision: 0.824298
+    low_recall: 0.954999
+    macro_f1: 0.475902
+    confusion_matrix: [[18, 61, 27], [152, 2831, 5460], [140, 1073, 25742]]
+test_on_corridors_only:
+  random_forest:
+    accuracy: 0.859784
+    balanced_accuracy: 0.663555
+    high_precision: 0.252101
+    high_recall: 0.422535
+    high_flagged: 119
+    high_caught: 30
+    high_total: 71
+    high_average_precision: 0.254283
+    fatal_called_low: 21
+    high_flags_serious: 0.840336
+    medium_precision: 0.712176
+    medium_recall: 0.643897
+    low_precision: 0.901216
+    low_recall: 0.924232
+    macro_f1: 0.634895
+  svm:
+    accuracy: 0.819877
+    balanced_accuracy: 0.721674
+    high_precision: 0.138462
+    high_recall: 0.507042
+    high_flagged: 260
+    high_caught: 36
+    high_total: 71
+    high_average_precision: 0.130259
+    fatal_called_low: 8
+    high_flags_serious: 0.773077
+    medium_precision: 0.571395
+    medium_recall: 0.844034
+    low_precision: 0.955834
+    low_recall: 0.813947
+    macro_f1: 0.592727
+  naive_bayes:
+    accuracy: 0.813482
+    balanced_accuracy: 0.484505
+    high_precision: 0.058537
+    high_recall: 0.169014
+    high_flagged: 205
+    high_caught: 12
+    high_total: 71
+    high_average_precision: 0.03508
+    fatal_called_low: 22
+    high_flags_serious: 0.531707
+    medium_precision: 0.706622
+    medium_recall: 0.326999
+    low_precision: 0.832726
+    low_recall: 0.957502
+    macro_f1: 0.47494
+test_without_street_history:
+  random_forest:
+    accuracy: 0.850637
+    balanced_accuracy: 0.661834
+    high_precision: 0.17037
+    high_recall: 0.433962
+    high_flagged: 270
+    high_caught: 46
+    high_total: 106
+    high_average_precision: 0.206816
+    fatal_called_low: 28
+    high_flags_serious: 0.837037
+    medium_precision: 0.716151
+    medium_recall: 0.630226
+    low_precision: 0.893181
+    low_recall: 0.921313
+    macro_f1: 0.607386
+  svm:
+    accuracy: 0.820527
+    balanced_accuracy: 0.684687
+    high_precision: 0.139932
+    high_recall: 0.386792
+    high_flagged: 293
+    high_caught: 41
+    high_total: 106
+    high_average_precision: 0.115864
+    fatal_called_low: 15
+    high_flags_serious: 0.805461
+    medium_precision: 0.587008
+    medium_recall: 0.856212
+    low_precision: 0.954839
+    low_recall: 0.811055
+    macro_f1: 0.593037
+  naive_bayes:
+    accuracy: 0.805205
+    balanced_accuracy: 0.494669
+    high_precision: 0.063492
+    high_recall: 0.188679
+    high_flagged: 315
+    high_caught: 20
+    high_total: 106
+    high_average_precision: 0.043928
+    fatal_called_low: 28
+    high_flags_serious: 0.565079
+    medium_precision: 0.706442
+    medium_recall: 0.342888
+    low_precision: 0.825737
+    low_recall: 0.952439
+    macro_f1: 0.480424
+random_forest_top_features:
+  - ['two_wheelers', 14.1]
+  - ['motorcycle_involved', 12.7]
+  - ['Motorcycle', 12.6]
+  - ['Car', 6.8]
+  - ['ct_pedestrian', 6.3]
+  - ['Collision Type=Hit Pedestrian', 5.2]
+  - ['total_vehicles', 3.7]
+  - ['single_vehicle', 3.2]
+  - ['Accident Factor=No Accident Factor (Based on the Police Blotter Book)', 2.1]
+  - ['af_none', 1.9]
+tuning_2024_average_precision:
+  - [random_forest, '200 trees, depth 15, min leaf 5, gentler SMOTE', 0.3157]
+  - [random_forest, '200 trees, depth 15, min leaf 5, balanced class weights', 0.2369]
+  - [random_forest, '200 trees, no depth limit, min leaf 5, balanced class weights', 0.2440]
+  - [random_forest, '200 trees, no depth limit, min leaf 25, balanced class weights', 0.2429]
+  - [random_forest, '200 trees, depth 20, min leaf 10, gentler SMOTE', 0.3140]
+  - [random_forest, '200 trees, no depth limit, min leaf 25, gentler SMOTE', 0.3154]
+  - [svm, 'linear, C = 0.0003, standardised inputs, balanced class weights', 0.2097]
+  - [svm, 'linear, C = 0.001, standardised inputs, balanced class weights', 0.1793]
+  - [svm, 'linear, C = 0.003, standardised inputs, balanced class weights', 0.1517]
+  - [svm, 'linear, C = 0.01, standardised inputs, balanced class weights', 0.1157]
+  - [svm, 'linear, C = 0.1, standardised inputs, balanced class weights', 0.1000]
+  - [svm, 'linear, C = 1.0, standardised inputs, balanced class weights', 0.0984]
+  - [naive_bayes, 'Gaussian, SMOTE', 0.1072]
+  - [naive_bayes, 'Gaussian, no resampling', 0.1069]
+  - [naive_bayes, 'Gaussian, var_smoothing 0.1', 0.0178]
+  - [naive_bayes, 'Gaussian on normal-shaped inputs, var_smoothing 0.01', 0.1100]
+  - [naive_bayes, 'Gaussian on normal-shaped inputs, var_smoothing 0.1', 0.1077]
+  - [naive_bayes, 'Gaussian on normal-shaped inputs, SMOTE', 0.1170]
 priority_labels: [High, Medium, Low]

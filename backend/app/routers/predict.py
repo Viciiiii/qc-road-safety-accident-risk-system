@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -15,9 +15,8 @@ class PredictRequest(BaseModel):
     collision_type: str
     accident_factor: str
     vehicles: Dict[str, int] = Field(default_factory=dict)
-    # Accepted so the frontend can send the whole report, but NOT a model input:
-    # the trained models don't use location (see priority_metadata.yaml -> feature_columns).
-    corridor: Optional[str] = None
+    # A model input: the corridor's crash history (2022-2023) is looked up in models/priority_street_history.json.
+    corridor: str = Field(min_length=1, max_length=150)
 
     @field_validator("vehicles")
     @classmethod
@@ -52,6 +51,7 @@ def predict_incident(body: PredictRequest):
             collision_type=body.collision_type,
             accident_factor=body.accident_factor,
             vehicles=body.vehicles,
+            corridor=body.corridor,
         )
     except InvalidInput as exc:
         raise HTTPException(422, str(exc))

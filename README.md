@@ -33,38 +33,44 @@ This is a proxy: it measures how bad the outcome turned out to be, not a case-by
 
 ## Model results
 
-Measured once on a held-out test set of real data (25,723 crashes, 92 of them fatal). Each model flags High when its High score reaches a cutoff chosen by cross-validation on the training data; otherwise the larger of Medium and Low wins.
+The thesis compares Random Forest, SVM and Naive Bayes, so all three get exactly the same treatment:
 
-| Model | Accuracy | Precision on High | Recall on High | Flagged High | Fatal caught |
-|---|---|---|---|---|---|
-| Random Forest | 84.4% | 15.8% | 45.7% | 265 | 42 of 92 |
-| SVM (linear) | 77.7% | 4.3% | 83.7% | 1,786 | 77 of 92 |
-| Naive Bayes | 72.1% | 2.1% | 91.3% | 3,922 | 84 of 92 |
+- **Split by year.** Trained on 2022–2023 (58,445 crashes), settings and cutoffs chosen on 2024, tested **once** on all 35,504 crashes from 2025 (106 fatal). This is how the app is used: models built on past years, applied to crashes that come later.
+- **Same inputs** for all three (85 in total), all known when a crash is reported: hour, minute, day, vehicle counts, engineered flags (night, rush hour, two-wheelers, motorcycle and bus/truck, hit pedestrian, ...), Month / Weather / Collision Type / Accident Factor as one column per value, and **street history**: how often crashes on the street, and on that street at that hour, were fatal in 2022–2023 (smoothed toward the citywide rate for streets with few crashes; for training crashes it is computed out-of-fold, so a crash never sees its own outcome).
+- **Same tuning effort.** Six settings per model; the one with the best High PR-AUC on 2024 is kept.
+- **Same cutoff rule.** Each model flags High when its High score reaches the cutoff that maximises F2 on 2024 (recall weighted above precision); otherwise the larger of Medium and Low wins.
 
-No model wins on every measure. SVM and Naive Bayes catch more fatal crashes but raise far more false alarms; Random Forest is the most balanced. Only 0.36% of crashes are fatal, so Random Forest's 15.8% precision is about 44 times better than chance. The models use time, weather, collision type, accident factor and vehicles. They do **not** use location.
+Results on 2025:
 
-### Improving precision
+| Model | Accuracy | Precision on High | Recall on High | PR-AUC (High) | Flagged High | Fatal caught | Fatal called Low |
+|---|---|---|---|---|---|---|---|
+| **Random Forest** | **85.5%** | **26.5%** | 46.2% | **0.283** | 185 | 49 of 106 | 28 |
+| SVM (linear) | 81.9% | 13.3% | **50.9%** | 0.124 | 406 | 54 of 106 | **12** |
+| Naive Bayes | 80.5% | 5.8% | 17.0% | 0.039 | 310 | 18 of 106 | 27 |
 
-The first version of the models (21 raw features, full SMOTE, highest score wins) scored, on the same test set:
+- **Random Forest is the best overall.** About 1 in 4 of its High flags was a fatal crash, against 0.3% by chance (about 88 times better), and 80% were serious (fatal or injury).
+- **SVM is the cautious one.** It is less precise but misses the fewest fatal crashes outright (12 called Low).
+- **Naive Bayes is the weakest and least stable.** It scored well on 2024 but dropped on 2025; it assumes every input is independent, which crash data isn't.
+- **Location helps, mostly for Random Forest.** Without the street history, Random Forest's precision falls from 26.5% to 17.0% and its PR-AUC from 0.283 to 0.207; SVM gains a little (0.116 → 0.124) and Naive Bayes doesn't benefit (0.044 → 0.039).
+- On the 25,960 crashes on the 29 monitored corridors (what the app predicts), Random Forest scores 25.2% precision and 42.3% recall.
 
-| Model | Precision on High | Recall on High | Flagged High |
-|---|---|---|---|
-| Random Forest | 12.8% → **15.8%** | 40.2% → **45.7%** | 288 → 265 |
-| SVM (linear) | 2.2% → **4.3%** | 77.2% → **83.7%** | 3,179 → 1,786 |
-| Naive Bayes | 0.7% → **2.1%** | 87.0% → **91.3%** | 11,938 → 3,922 |
+Random Forest's top inputs: two-wheelers involved, motorcycle involved, motorcycle count, car count and hit-pedestrian crashes. Every number is in `backend/models/priority_metadata.yaml`, including the tuning results for all 18 settings.
 
-What was tried, in order:
+### Compared with the previous version
 
-1. **A cutoff on its own** (no retraining), chosen by 5-fold cross-validation on the training set. It gave no real gain: for Random Forest the recall-preserving cutoff (0.395) scored 11.2% / 41.3% on the test set, about the same as before.
-2. **Feature engineering, imbalance handling and tuning**, each option scored by 3-fold cross-validation on the training set (average precision for High). Kept:
-   - New features, all known when a crash is reported: night, late night, rush hour, weekday, weekend, total vehicles, two-wheelers, motorcycle involved, bus or truck involved, motorcycle *and* bus/truck, single vehicle, and yes/no flags cleaned from the 905 messy Collision Type values and 56 Accident Factor values (hit pedestrian, head-on, self accident, drunk driving, …). District was dropped: it has one value.
-   - All vehicle columns as plain numbers. The notebook label-encoded Motorcycle and Fx / Taxi as text, so "1" and "1.0" got different codes, and "1" only appears in the 2023 file, so the code quietly carried the year.
-   - Random Forest: gentler SMOTE (High raised to 10% of the Low count). SVM: standardised features and balanced class weights instead of SMOTE, C = 0.01. Naive Bayes: unchanged SMOTE.
-   - A High cutoff per model, chosen by cross-validation so each model catches at least as many fatal crashes as its first version did.
+The previous models (48 inputs without location, settings tuned on a random 80/20 split, cutoffs set to keep recall high), retrained on 2022–2023 and tested on the same 2025 crashes:
 
-A bootstrap on the test set puts Random Forest's precision gain at +3.0 points (95% interval +0.1 to +6.0). With only 92 fatal crashes the exact size is uncertain; the SVM and Naive Bayes gains are clear. Precision is still low in absolute terms because the records lack speed, helmet or seatbelt use, victim age and response time.
+| Model | Precision on High | Recall on High | Flagged High | PR-AUC (High) |
+|---|---|---|---|---|
+| Random Forest | 12.4% → **26.5%** | 58.5% → 46.2% | 498 → 185 | 0.221 → **0.283** |
+| SVM (linear) | 2.9% → **13.3%** | 87.7% → 50.9% | 3,158 → 406 | 0.151 → 0.124 |
+| Naive Bayes | 1.0% → **5.8%** | 84.0% → 17.0% | 8,805 → 310 | 0.041 → 0.039 |
 
-To retrain: `pip install -r requirements-train.txt`, then `python scripts/train_models.py <folder with the raw Excel files>`. It rebuilds all three models, the cutoffs (`priority_model_config.json`) and `priority_metadata.yaml`, and reproduces the numbers above exactly.
+Precision went up for all three because the new models raise far fewer false alarms; recall went down because the old cutoffs kept recall high whatever the cost. PR-AUC, which doesn't depend on a cutoff, shows Random Forest clearly improved, SVM slightly worse, Naive Bayes unchanged. (The previous version's own report, on a random 80/20 split, gave Random Forest 15.8% / 45.7%; a random split mixes the years and flatters the results, which is why the comparison now tests on a later year.)
+
+Precision is still low in absolute terms because the records lack speed, helmet or seatbelt use, victim age and response time.
+
+To retrain: `pip install -r requirements-train.txt`, then `python scripts/train_models.py <folder with the raw Excel files>`. It rebuilds all three models, the cutoffs and inputs (`priority_model_config.json`), the street history (`priority_street_history.json`) and `priority_metadata.yaml`, and reproduces the numbers above exactly.
 
 ### Corridor ranking: tested on 2025
 
@@ -102,7 +108,7 @@ A Rising corridor usually *stays* elevated, but doesn't usually keep *climbing*:
 
 ### Live results in the app
 
-When a crash is logged, all three models' estimates are saved. Once an admin confirms the real outcome, **Records** marks the Random Forest estimate as correct, underestimated (less serious than it turned out, the costlier mistake) or overestimated, and **Analytics** shows the same comparison for all three models. With only a handful of confirmed incidents these figures say little; the test-set results above remain the evaluation.
+When a crash is logged, all three models' estimates are saved. Once an admin confirms the real outcome, **Records** marks the Random Forest estimate as correct, underestimated (less serious than it turned out, the costlier mistake) or overestimated, and **Analytics** shows the same comparison for all three models. With only a handful of confirmed incidents these figures say little; the 2025 test results above remain the evaluation.
 
 ## Architecture
 
@@ -131,8 +137,8 @@ backend/
       incidents.py       GET/POST /api/incidents   POST /api/incidents/{id}/confirm   POST /api/incidents/export
       predict.py         GET  /api/form-options    POST /api/predict-incident
     ml/features.py       Feature engineering, shared by training and the API
-    ml/predictor.py      Loads the models and cutoffs, runs predictions
-  models/                Trained models, cutoffs (priority_model_config.json), encoders, form options
+    ml/predictor.py      Loads the models, cutoffs and street history, runs predictions
+  models/                Trained models, inputs and cutoffs (priority_model_config.json), street history, form options
   db/                    SQL scripts: create tables, seed corridors, monthly crash counts, model estimates
   scripts/               train_models.py, create_admin.py, build_form_options.py, build_corridor_monthly.py
   tests/                 Backend tests (pytest)
@@ -241,7 +247,7 @@ To open the app from another device on your network, use the computer's IP addre
 1. Staff log a crash on **Report Incident**. It appears in **Records** as *Pending review*, with the models' estimate. It doesn't affect anything else yet.
 2. When the real outcome is known, an admin picks Fatal / Non Fatal Injury / Damage to Property in **Records** and confirms it (*Confirmed*). From then on it counts toward its corridor's severity score right away (unless it's dated before the ranking's 12-month window).
 3. The admin clicks **Export for retraining**. The CSV uses the same column names as the MMDA data, and the rows become *Included in training*.
-4. Append those rows to the historical dataset and run `python scripts/train_models.py <folder with the raw Excel files>` (see *Improving precision*). It writes the models, cutoffs and metadata into `backend/models/`. Then run `python scripts/build_form_options.py <same folder>`, update the numbers in `frontend/src/data/modelResults.js` from `priority_metadata.yaml`, and restart the API. Keep scikit-learn at the version you trained with and update `requirements.txt` to match.
+4. Append those rows to the historical dataset and run `python scripts/train_models.py <folder with the raw Excel files>` (see *Model results*). It writes the models, cutoffs, street history and metadata into `backend/models/`. If the new data adds a year, move the split in the script forward (for example train 2023–2024, choose on 2025, test on 2026). Then run `python scripts/build_form_options.py <same folder>`, update the numbers in `frontend/src/data/modelResults.js` from `priority_metadata.yaml`, and restart the API. Keep scikit-learn at the version you trained with and update `requirements.txt` to match.
 
 The models' own estimate is never used as a training label; only confirmed outcomes are, so the models don't learn from their own guesses.
 
@@ -268,8 +274,8 @@ The tests run against a **separate test database**, so your real data is never t
 ## Limitations
 
 - **Sign-in is prototype-grade.** Passwords are hashed and sessions are server-side, but there is no email-based password reset (an admin resets it), no two-factor sign-in, and the wrong-password lockout is kept in memory, so it resets when the API restarts. Run it over HTTPS (`COOKIE_SECURE=true`) before putting it on the internet.
-- **The models ignore location.** Choosing a different street doesn't change a prediction; the street is only saved with the record.
-- **"High" is a weak alert.** Precision on High is low (table above), so most High flags are false alarms. The percentages shown are model scores, not real-world probabilities; that's why each model has its own High cutoff (Random Forest flags High from 18.4%).
+- **Location enters only as street history.** The models know how often crashes on a street were fatal in 2022–2023, not the road's design, speed limit or traffic volume. The history is fixed at training time and only updates when the models are retrained.
+- **"High" is a weak alert.** Precision on High is low (table above), so most High flags are false alarms. The percentages shown are model scores, not real-world probabilities; that's why each model has its own High cutoff (Random Forest flags High from 20.0%). Naive Bayes is judged by its likelihood score rather than a percentage, because its probabilities round to 0% or 100%.
 - **Old records keep old estimates.** Incidents logged before the model update show the estimate the first models gave at the time.
 - **The ranking looks back, not ahead.** It assumes the worst corridors of the last 12 months stay the worst next month. That held about 9 in 10 times in 2025, but it can't anticipate a sudden change on a corridor. It was tested on one year only.
 - **Trend arrows have a hard line.** A corridor just under the 15-point line can flip to Rising with one more confirmed incident, and a Rising arrow on a quiet road can rest on a handful of crashes. The tooltip and Map popup show the actual numbers behind each arrow.

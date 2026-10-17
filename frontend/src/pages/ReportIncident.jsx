@@ -6,7 +6,7 @@ import { useIncidents } from "../incidents/IncidentsContext";
 import { useRiskAreas } from "../api/useRiskAreas";
 import { useFormOptions } from "../api/useFormOptions";
 import { apiPost, API_BASE } from "../api/client";
-import { modelMetrics } from "../data/modelResults";
+import { modelMetrics, FATAL_BASE_RATE } from "../data/modelResults";
 
 // Held-out precision on High priority (backend/models/priority_metadata.yaml). Shown as a
 // caution whenever a model flags High, so the number isn't taken at face value.
@@ -40,7 +40,9 @@ function Results({ result }) {
               <span className="text-xs text-muted">
                 {p.high_cutoff != null
                   ? `Flags High at ${p.high_cutoff}% or more`
-                  : "No probability score (linear SVM)"}
+                  : m.key === "svm"
+                    ? "No probability score (linear SVM)"
+                    : "Likelihood score, no %"}
               </span>
             </div>
             {p.probabilities && (
@@ -50,8 +52,8 @@ function Results({ result }) {
             )}
             {p.label === "High" && (
               <div className="text-[11px] text-muted mt-1 ml-[98px]">
-                ⚠ When {m.name} flags High, the crash turned out fatal ~{m.precision}% of the time on held-out test
-                data (chance: 0.36%). Treat it as "check this first", not a certainty.
+                ⚠ When {m.name} flags High, the crash turned out fatal ~{m.precision}% of the time on the 2025 test
+                data (chance: {FATAL_BASE_RATE}%). Treat it as "check this first", not a certainty.
               </div>
             )}
           </div>
@@ -68,9 +70,10 @@ function Results({ result }) {
         <br />
         <br />
         Each model flags High once its High score passes a cutoff chosen during training, so a High score well
-        under 50% can still mean High. Location isn't a model input — the models use time, weather, collision
-        type, accident factor and vehicles only, so <b className="text-ink">{result.corridor}</b> is saved with the record but doesn't
-        change these predictions.
+        under 50% can still mean High. Location counts: besides time, day/night, collision type, accident factor
+        and vehicles, the models use <b className="text-ink">{result.corridor}</b>'s crash history from 2022–2023
+        {result.street_history ? ` (${result.street_history.crashes.toLocaleString()} crashes)` : ""}, so the same
+        crash can score differently on another road.
         {result.adjustments.length > 0 && (
           <>
             <br />
