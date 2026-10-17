@@ -5,7 +5,7 @@ import { apiGet, apiPatch, apiPost } from "../api/client";
 import { useLanguage } from "../i18n/LanguageContext";
 
 // Accounts live in PostgreSQL. Passwords are hashed by the server; a temporary
-// password is generated there and shown here exactly oncefire.
+// password is generated there and shown here exactly once.
 function fromApi(u) {
   return {
     id: u.id,
